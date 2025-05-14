@@ -507,4 +507,33 @@ async function initializeApp() {
 //     console.warn("Mesajlaşma butonları veya giriş alanı DOM'da bulunamadı.");
 // }
 
+// --- Sohbet işlemleri ---
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
+const messages = document.getElementById('messages');
+
+chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (chatInput.value) {
+        // Mesajı gönder
+        socket.emit('chat message', {
+            text: chatInput.value,
+            sender: myUsername || 'Misafir'
+        });
+        chatInput.value = '';
+    }
+});
+
+// Gelen mesajları görüntüle
+socket.on('chat message', (msg) => {
+    const messageElement = document.createElement('div');
+    messageElement.style.margin = '5px';
+    messageElement.style.padding = '8px';
+    messageElement.style.backgroundColor = msg.sender === myUsername ? '#e3f2fd' : '#f5f5f5';
+    messageElement.style.borderRadius = '5px';
+    messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
+    messages.appendChild(messageElement);
+    messages.scrollTop = messages.scrollHeight;
+});
+
 console.log("Script yüklendi. Kullanıcı adı bekleniyor...");

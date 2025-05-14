@@ -130,6 +130,11 @@ io.on('connection', (socket) => {
             }
         }
     });
+
+    // Sohbet sistemi için Socket.IO olayları
+    socket.on('chat message', (msg) => {
+        io.emit('chat message', msg);
+    });
 });
 
 // Dinamik port veya varsayılan 3000
