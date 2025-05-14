@@ -557,40 +557,28 @@ function generateRoomCode() {
 }
 
 function createRoom() {
-    const username = usernameInput.value.trim();
-    if (!username) {
-        alert("Lütfen bir kullanıcı adı girin.");
-        return;
-    }
-    myUsername = username;
-    displayUsername.textContent = myUsername;
-
     const roomCode = generateRoomCode();
     currentRoom = roomCode;
 
+    // Show app area and hide join area
     joinArea.classList.add('hidden');
     appArea.classList.remove('hidden');
 
+    displayUsername.textContent = myUsername || 'Oluşturan'; // optional
     connectToSignalingServer(roomCode);
     alert(`Oda oluşturuldu: ${roomCode}. Diğer kullanıcıların bu kodla katılmasını bekleyin.`);
 }
 
 function joinRoom() {
-    const username = usernameInput.value.trim();
-    if (!username) {
-        alert("Lütfen bir kullanıcı adı girin.");
-        return;
-    }
-    myUsername = username;
-    displayUsername.textContent = myUsername;
-
     const roomCode = prompt('Katılmak istediğiniz oda kodunu girin:');
     if (roomCode && roomCode.length === 6) {
         currentRoom = roomCode;
 
+        // Show app area and hide join area
         joinArea.classList.add('hidden');
         appArea.classList.remove('hidden');
 
+        displayUsername.textContent = myUsername || 'Katılan'; // optional
         connectToSignalingServer(roomCode);
     } else {
         alert('Geçerli bir 6 haneli oda kodu girin.');
