@@ -19,6 +19,14 @@
             --button-color: white;
             --button-hover: #0056b3;
             --button-disabled: #ccc;
+            --chat-bg: #ffffff;
+            --chat-border: #eee;
+            --chat-text: #000000;
+            --input-bg: #ffffff;
+            --input-border: #ddd;
+            --button-text: #ffffff;
+            --theme-toggle-bg: #f8f9fa;
+            --theme-toggle-color: #333;
         }
 
         :root[data-theme="dark"] {
@@ -34,6 +42,14 @@
             --button-color: white;
             --button-hover: #003d82;
             --button-disabled: #666666;
+            --chat-bg: #1a1a1a;
+            --chat-border: #333333;
+            --chat-text: #ffffff;
+            --input-bg: #2d2d2d;
+            --input-border: #404040;
+            --button-text: #ffffff;
+            --theme-toggle-bg: #2d2d2d;
+            --theme-toggle-color: #fff;
         }
 
         body { 
@@ -276,8 +292,8 @@
             border-radius: 50%;
             border: none;
             cursor: pointer;
-            background-color: var(--button-bg);
-            color: var(--button-color);
+            background-color: var(--theme-toggle-bg);
+            color: var(--theme-toggle-color);
             width: 40px;
             height: 40px;
             display: flex;

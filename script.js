@@ -35,41 +35,48 @@ let idsThatNeedMyAnswer = new Set(); // Bize offer gönderen ama henüz cevaplay
 
 console.log('Bağlanılacak sunucu:', signalingServerUrl);
 
-// Dark Mode işlemleri
-const themeToggle = document.getElementById('theme-toggle');
-const htmlElement = document.documentElement;
+// Tema yönetimi için değişkenler
+const themeToggle = document.createElement('button');
+themeToggle.id = 'theme-toggle';
+themeToggle.innerHTML = '🌙'; // Başlangıç ikonu
+themeToggle.title = 'Temayı Değiştir';
+document.querySelector('.chat-header').appendChild(themeToggle);
 
-// Kullanıcının tercih ettiği temayı localStorage'dan al
-const savedTheme = localStorage.getItem('theme') || 'light';
-htmlElement.setAttribute('data-theme', savedTheme);
+// Tema durumu
+let isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 // Tema değiştirme fonksiyonu
 function toggleTheme() {
-    const currentTheme = htmlElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    
-    htmlElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    
-    // SVG ikonunu güncelle
-    const path = themeToggle.querySelector('path');
-    if (newTheme === 'dark') {
-        path.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
-    } else {
-        path.setAttribute('d', 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z');
-    }
+    isDarkMode = !isDarkMode;
+    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+    themeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
+    localStorage.setItem('chatTheme', isDarkMode ? 'dark' : 'light');
 }
 
-themeToggle.addEventListener('click', toggleTheme);
-
-// Sayfa yüklendiğinde doğru ikonu göster
-window.addEventListener('load', () => {
-    const currentTheme = htmlElement.getAttribute('data-theme');
-    const path = themeToggle.querySelector('path');
-    if (currentTheme === 'dark') {
-        path.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
+// Sistem teması değişikliğini dinle
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (localStorage.getItem('chatTheme') === null) { // Kullanıcı manuel tema seçmediyse
+        isDarkMode = e.matches;
+        document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+        themeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
     }
 });
+
+// Sayfa yüklendiğinde tema ayarını kontrol et
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('chatTheme');
+    if (savedTheme) {
+        isDarkMode = savedTheme === 'dark';
+    }
+    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+    themeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
+}
+
+// Tema değiştirme butonu için event listener
+themeToggle.addEventListener('click', toggleTheme);
+
+// Tema başlatma
+initializeTheme();
 
 // --- Socket.IO Bağlantısı ve Olayları ---
 function connectToSignalingServer() {
