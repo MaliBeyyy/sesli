@@ -32,28 +32,18 @@ const io = socketIO(server, {
     transports: ['websocket', 'polling']
 });
 
-function generateRoomId(length = 8) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
 let roomPeers = {}; // Odadaki kullanıcıları socket.id'leri ile saklayacağız: { socketId: socketNesnesi }
 
 io.on('connection', (socket) => {
     // Bağlantı sırasında query'den kullanıcı adını al
     const clientQueryUsername = socket.handshake.query.username;
-    const clientQueryRoom = socket.handshake.query.room;
     let processedUsername = clientQueryUsername;
 
     if (typeof clientQueryUsername === 'undefined' || clientQueryUsername === null || String(clientQueryUsername).trim() === '') {
         processedUsername = 'AnonimKullanici';
     }
     
-    console.log(`[Sunucu] Yeni bağlantı: ID=${socket.id}. İstemciden gelen query.username='${clientQueryUsername}' (tip: ${typeof clientQueryUsername}). İşlenmiş username='${processedUsername}', room='${clientQueryRoom}'`);
+    console.log(`[Sunucu] Yeni bağlantı: ID=${socket.id}. İstemciden gelen query.username='${clientQueryUsername}' (tip: ${typeof clientQueryUsername}). İşlenmiş username='${processedUsername}'`);
 
     // --- existing-peers için loglama (önceki gibi kalabilir veya basitleştirilebilir) ---
     // console.log('[Sunucu] "existing-peers" için roomPeers durumu:', JSON.stringify(roomPeers, (key, value) => (key === 'socket' ? '[SocketObject]' : value), 2));
@@ -164,39 +154,3 @@ server.listen(PORT, () => {
 app.get('/ping', (req, res) => {
     res.send('pong');
 });
-
-//aliyi götten
-
-const createRoomButton = document.createElement('button');
-createRoomButton.textContent = 'Oda Oluştur';
-createRoomButton.onclick = () => {
-    currentRoomId = generateRoomId();
-    alert(`Oda oluşturuldu: ${currentRoomId}`);
-};
-document.body.appendChild(createRoomButton);
-
-const joinRoomButton = document.createElement('button');
-joinRoomButton.textContent = 'Odaya Katıl';
-joinRoomButton.onclick = () => {
-    const roomId = prompt('Katılmak istediğiniz oda kodunu girin:');
-    if (roomId) {
-        currentRoomId = roomId.trim();
-        if (myUsername) {
-            initializeApp();
-        } else {
-            alert('Önce kullanıcı adınızı girip katılmalısınız.');
-        }
-    }
-};
-document.body.appendChild(joinRoomButton);
-
-const leaveRoomButton = document.createElement('button');
-leaveRoomButton.textContent = 'Odadan Ayrıl';
-leaveRoomButton.onclick = () => {
-    if (socket) {
-        socket.disconnect();
-        alert('Odadan ayrıldınız.');
-    }
-    window.location.reload(); // Reset UI
-};
-document.body.appendChild(leaveRoomButton);
