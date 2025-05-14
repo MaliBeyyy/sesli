@@ -30,7 +30,6 @@ const io = socketIO(server, {
     transports: ['websocket', 'polling']
 });
 
-const MAX_PEERS_IN_ROOM = 3;
 let roomPeers = {}; // Odadaki kullanıcıları socket.id'leri ile saklayacağız: { socketId: socketNesnesi }
 
 io.on('connection', (socket) => {
@@ -39,17 +38,10 @@ io.on('connection', (socket) => {
     let processedUsername = clientQueryUsername;
 
     if (typeof clientQueryUsername === 'undefined' || clientQueryUsername === null || String(clientQueryUsername).trim() === '') {
-        processedUsername = 'AnonimKullanici'; // Daha belirgin bir varsayılan isim
+        processedUsername = 'AnonimKullanici';
     }
     
     console.log(`[Sunucu] Yeni bağlantı: ID=${socket.id}. İstemciden gelen query.username='${clientQueryUsername}' (tip: ${typeof clientQueryUsername}). İşlenmiş username='${processedUsername}'`);
-
-    if (Object.keys(roomPeers).length >= MAX_PEERS_IN_ROOM) {
-        console.log(`[Sunucu] Oda dolu. Yeni kullanıcı ${processedUsername} (${socket.id}) reddedildi.`);
-        socket.emit('room-full');
-        socket.disconnect(true);
-        return;
-    }
 
     // --- existing-peers için loglama (önceki gibi kalabilir veya basitleştirilebilir) ---
     // console.log('[Sunucu] "existing-peers" için roomPeers durumu:', JSON.stringify(roomPeers, (key, value) => (key === 'socket' ? '[SocketObject]' : value), 2));
@@ -153,7 +145,7 @@ io.on('connection', (socket) => {
 // Dinamik port veya varsayılan 3000
 const PORT = process.env.PORT || 3000; 
 server.listen(PORT, () => {
-    console.log(`Sinyalleşme sunucusu ${PORT} portunda çalışıyor (${MAX_PEERS_IN_ROOM} kişilik odalar)...`);
+    console.log(`Sinyalleşme sunucusu ${PORT} portunda çalışıyor...`);
 });
 
 // server.js dosyasının uygun bir yerine (diğer app.use'lardan sonra, server.listen'den önce)

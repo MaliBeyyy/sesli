@@ -97,6 +97,34 @@
             cursor: pointer;
         }
 
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        #clear-chat {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        #clear-chat:hover {
+            background: #e9ecef;
+            color: #dc3545;
+        }
+
     </style>
 </head>
 <body>
@@ -129,6 +157,14 @@
     </div>
 
     <div id="chat-container">
+        <div class="chat-header">
+            <span>Sohbet</span>
+            <button id="clear-chat" title="Sohbeti Temizle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+            </button>
+        </div>
         <div id="messages"></div>
         <form id="chat-form">
             <input id="chat-input" type="text" placeholder="Mesajınızı yazın..." autocomplete="off">

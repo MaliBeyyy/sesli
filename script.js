@@ -524,6 +524,27 @@ async function initializeApp() {
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const messages = document.getElementById('messages');
+const clearChatButton = document.getElementById('clear-chat');
+
+// Sohbeti temizleme fonksiyonu
+function clearChat() {
+    if (confirm('Tüm sohbet geçmişini silmek istediğinize emin misiniz?')) {
+        while (messages.firstChild) {
+            messages.removeChild(messages.firstChild);
+        }
+        // Temizleme işlemini diğer kullanıcılara bildir
+        if (socket) {
+            socket.emit('chat message', {
+                text: '--- Sohbet geçmişini temizledi ---',
+                sender: myUsername || 'Misafir',
+                type: 'system'
+            });
+        }
+    }
+}
+
+// Temizleme butonu için event listener
+clearChatButton.addEventListener('click', clearChat);
 
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -532,7 +553,8 @@ chatForm.addEventListener('submit', (e) => {
         // Mesajı gönder
         socket.emit('chat message', {
             text: chatInput.value,
-            sender: myUsername || 'Misafir'
+            sender: myUsername || 'Misafir',
+            type: 'message'
         });
         
         // Kendi mesajımızı hemen göster
@@ -558,14 +580,25 @@ function setupChatListeners() {
     socket.on('chat message', (msg) => {
         console.log('Mesaj alındı:', msg);
         // Kendi mesajlarımızı tekrar gösterme (zaten gösterildi)
-        if (msg.sender === myUsername) return;
+        if (msg.sender === myUsername && msg.type !== 'system') return;
         
         const messageElement = document.createElement('div');
         messageElement.style.margin = '5px';
         messageElement.style.padding = '8px';
-        messageElement.style.backgroundColor = '#f5f5f5';
-        messageElement.style.borderRadius = '5px';
-        messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
+        
+        // Sistem mesajları için farklı stil
+        if (msg.type === 'system') {
+            messageElement.style.backgroundColor = '#f8d7da';
+            messageElement.style.color = '#721c24';
+            messageElement.style.textAlign = 'center';
+            messageElement.style.fontStyle = 'italic';
+            messageElement.innerHTML = `${msg.sender} ${msg.text}`;
+        } else {
+            messageElement.style.backgroundColor = '#f5f5f5';
+            messageElement.style.borderRadius = '5px';
+            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
+        }
+        
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
     });
