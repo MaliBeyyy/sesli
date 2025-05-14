@@ -1,5 +1,3 @@
-// --- Global Room ID ---
-let currentRoomId = '';
 const joinArea = document.getElementById('joinArea');
 const usernameInput = document.getElementById('usernameInput');
 const joinButton = document.getElementById('joinButton');
@@ -40,8 +38,7 @@ function connectToSignalingServer() {
     }
     socket = io(signalingServerUrl, {
         query: { 
-            username: myUsername,
-            room: currentRoomId
+            username: myUsername
         },
         transports: ['websocket', 'polling'],
         reconnectionAttempts: 5,
@@ -465,7 +462,63 @@ async function initializeApp() {
     }
 }
 
+// --- Mesajlaşma Fonksiyonları ---
 
+// const messageInput = document.getElementById('messageInput'); // KALDIRILACAK
+// const sendMessageButton = document.getElementById('sendMessageButton'); // KALDIRILACAK
+// const messagesDiv = document.getElementById('messages'); // KALDIRILACAK
+
+// const sendMessage = () => {
+//     const messageText = messageInput.value.trim();
+//     if (messageText && socket && myUsername) { 
+//         const messageData = {
+//             text: messageText,
+//         };
+//         socket.emit('new-message', messageData);
+//         appendMessage(myUsername, messageText, true); 
+//         messageInput.value = ''; 
+//     } else if (!myUsername) {
+//         console.warn("Mesaj gönderilemedi: Kullanıcı adı henüz ayarlanmadı.");
+//     } else if (!socket) {
+//         console.warn("Mesaj gönderilemedi: Sunucu bağlantısı yok.");
+//     }
+// }
+
+// const appendMessage = (username, text, isMine) => {
+//     if (!messagesDiv) {
+//         console.error("appendMessage: messagesDiv bulunamadı!");
+//         return;
+//     }
+//     const messageElement = document.createElement('div');
+//     messageElement.classList.add('message');
+//     if (isMine) {
+//         messageElement.classList.add('my-message');
+//     }
+
+//     const usernameElement = document.createElement('strong');
+//     usernameElement.textContent = username + ': ';
+//     
+//     const textNode = document.createTextNode(text);
+
+//     messageElement.appendChild(usernameElement);
+//     messageElement.appendChild(textNode);
+//     
+//     messagesDiv.appendChild(messageElement);
+//     messagesDiv.scrollTop = messagesDiv.scrollHeight; 
+// }
+
+// --- Olay Dinleyicileri (Mesajlaşma için) ---
+// if (sendMessageButton && messageInput) {
+//     sendMessageButton.addEventListener('click', sendMessage);
+
+//     messageInput.addEventListener('keypress', (event) => {
+//         if (event.key === 'Enter') {
+//             sendMessage();
+//         }
+//     });
+// } else {
+//     console.warn("Mesajlaşma butonları veya giriş alanı DOM'da bulunamadı.");
+// }
 
 // --- Sohbet işlemleri ---
 const chatForm = document.getElementById('chat-form');
@@ -552,49 +605,3 @@ function setupChatListeners() {
 }
 
 console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
-
-
-// --- Room ID Utility ---
-function generateRoomId(length = 8) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-// --- Room Buttons ---
-const createRoomButton = document.createElement('button');
-createRoomButton.textContent = 'Oda Oluştur';
-createRoomButton.onclick = () => {
-    currentRoomId = generateRoomId();
-    alert(`Oda oluşturuldu: ${currentRoomId}`);
-};
-document.body.appendChild(createRoomButton);
-
-const joinRoomButton = document.createElement('button');
-joinRoomButton.textContent = 'Odaya Katıl';
-joinRoomButton.onclick = () => {
-    const roomId = prompt('Katılmak istediğiniz oda kodunu girin:');
-    if (roomId) {
-        currentRoomId = roomId.trim();
-        if (myUsername) {
-            initializeApp();
-        } else {
-            alert('Önce kullanıcı adınızı girip katılmalısınız.');
-        }
-    }
-};
-document.body.appendChild(joinRoomButton);
-
-const leaveRoomButton = document.createElement('button');
-leaveRoomButton.textContent = 'Odadan Ayrıl';
-leaveRoomButton.onclick = () => {
-    if (socket) {
-        socket.disconnect();
-        alert('Odadan ayrıldınız.');
-    }
-    window.location.reload(); // Refresh to reset UI
-};
-document.body.appendChild(leaveRoomButton);
