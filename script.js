@@ -502,6 +502,40 @@ const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const messages = document.getElementById('messages');
 const clearChatButton = document.getElementById('clear-chat');
+const chatContainer = document.getElementById('chat-container');
+const chatToggle = document.getElementById('chat-toggle');
+
+// Sohbet durumu
+let isChatVisible = true;
+
+// Sohbeti aç/kapat fonksiyonu
+function toggleChat() {
+    isChatVisible = !isChatVisible;
+    chatContainer.classList.toggle('hidden', !isChatVisible);
+    
+    // Toggle butonunun ikonunu değiştir
+    chatToggle.innerHTML = isChatVisible 
+        ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>'
+        : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>';
+    
+    // Sohbet kapalıyken yeni mesaj gelirse butonu vurgula
+    if (!isChatVisible) {
+        chatToggle.style.transform = 'scale(1)';
+    }
+}
+
+// Yeni mesaj geldiğinde butonu vurgula
+function highlightChatButton() {
+    if (!isChatVisible) {
+        chatToggle.style.transform = 'scale(1.1)';
+        setTimeout(() => {
+            chatToggle.style.transform = 'scale(1)';
+        }, 200);
+    }
+}
+
+// Toggle butonu için event listener
+chatToggle.addEventListener('click', toggleChat);
 
 // Sohbeti temizleme fonksiyonu
 function clearChat() {
@@ -578,6 +612,9 @@ function setupChatListeners() {
         
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
+        
+        // Yeni mesaj geldiğinde butonu vurgula
+        highlightChatButton();
     });
 }
 
