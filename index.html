@@ -194,31 +194,6 @@
             transform: scale(1.1);
         }
 
-        .video-controls {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            gap: 10px;
-        }
-
-        .video-controls button {
-            padding: 8px 16px;
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-
-        .video-controls button:hover {
-            background-color: #1976D2;
-        }
-
     </style>
 </head>
 <body>
@@ -247,13 +222,11 @@
         <div id="controls">
             <button id="startButton" disabled>Sesi Başlat</button>
             <button id="muteButton" class="hidden">Sustur</button>
-            <button id="screenShareButton">Ekranı Paylaş</button>
         </div>
 
-        <h2>Görüntü ve Ses Akışları</h2>
+        <h2>Ses Akışları</h2>
         <div>
-            <h3>Kendi Görüntün ve Sesin</h3>
-            <video id="localVideo" autoplay muted playsinline style="width: 100%; max-width: 600px; border-radius: 8px;"></video>
+            <h3>Kendi Sesin (Duyulmayacak)</h3>
             <audio id="localAudio" muted controls></audio>
         </div>
         <div id="remoteAudioContainer">
