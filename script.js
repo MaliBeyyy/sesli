@@ -13,7 +13,7 @@ let localStream;
 const peerConnections = {}; // { peerId: RTCPeerConnection }
 const remoteAudioElements = {}; // { peerId: {div: HTMLDivElement, audio: HTMLAudioElement} } - Artık div'i de saklıyoruz
 let socket;
-const signalingServerUrl = 'http://localhost:3000';
+const signalingServerUrl = 'https://diskurt-oy50.onrender.com';
 let myUsername = ''; // Kullanıcı adını saklamak için
 
 // STUN sunucu yapılandırması (NAT traversal için)
