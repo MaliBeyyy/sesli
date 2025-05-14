@@ -197,18 +197,13 @@ function createPeerConnection(peerId, peerUsername = 'Diğer Kullanıcı') {
 
     pc.onicecandidate = (event) => {
         if (event.candidate) {
-            socket.emit('ice-candidate', { 
-                candidate: event.candidate, 
-                targetId: peerId 
-            });
-            console.log('ICE adayı gönderildi:', peerId);
+            socket.emit('ice-candidate', { candidate: event.candidate, targetId: peerId });
         }
     };
 
     pc.ontrack = (event) => {
-        console.log(`Uzak medya akışı alındı: ${peerUsername} (${peerId})`);
+        console.log(`Uzak ses akışı (track) alındı: ${peerUsername} (${peerId}) kullanıcısından`);
         let audioWrapper = remoteAudioElements[peerId];
-        
         if (!audioWrapper) {
             const peerDiv = document.createElement('div');
             peerDiv.id = `remoteAudioDiv-${peerId}`;
@@ -226,47 +221,33 @@ function createPeerConnection(peerId, peerUsername = 'Diğer Kullanıcı') {
             peerDiv.appendChild(remoteAudio);
             remoteAudioContainer.appendChild(peerDiv);
             
-            remoteAudioElements[peerId] = { 
-                div: peerDiv, 
-                audio: remoteAudio, 
-                username: peerUsername 
-            };
+            remoteAudioElements[peerId] = { div: peerDiv, audio: remoteAudio, username: peerUsername };
             audioWrapper = remoteAudioElements[peerId];
+            console.log(`Uzak ses için audio elementi oluşturuldu ve eklendi: ${peerUsername} (${peerId})`);
         }
-
         if (audioWrapper.audio.srcObject !== event.streams[0]) {
             audioWrapper.audio.srcObject = event.streams[0];
-            console.log(`Uzak ses akışı bağlandı: ${peerUsername} (${peerId})`);
+            console.log(`Uzak ses akışı (${peerUsername} (${peerId}) kullanıcısından) audio elementine atandı.`);
         }
     };
 
     pc.oniceconnectionstatechange = () => {
-        console.log(`ICE bağlantı durumu (${peerUsername} - ${peerId}): ${pc.iceConnectionState}`);
-        if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
-            console.warn(`Bağlantı sorunu: ${peerUsername} (${peerId})`);
-            // Bağlantıyı yeniden kurmayı dene
-            if (pc.iceConnectionState === 'failed') {
-                setTimeout(() => {
-                    if (pc.signalingState !== 'closed') {
-                        initiateOffer(peerId);
-                    }
-                }, 2000);
+        if (pc) {
+            console.log(`ICE bağlantı durumu (${peerUsername} - ${peerId}): ${pc.iceConnectionState}`);
+            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+                console.warn(`Bağlantı sorunu/kesintisi (${peerUsername} - ${peerId}).`);
             }
         }
     };
 
-    // Eğer yerel ses akışı varsa ekle
     if (localStream && localStream.active) {
         localStream.getTracks().forEach(track => {
             try {
                 pc.addTrack(track, localStream);
-                console.log(`Yerel track eklendi: ${track.kind} - Peer: ${peerId}`);
-            } catch(e) {
-                console.error(`Track eklenirken hata (${peerId}):`, e);
-            }
+            } catch(e) { console.error(`Track eklenirken hata (createPeerConnection for ${peerUsername} - ${peerId}):`, e); }
         });
+        console.log(`Yerel ses akışı PeerConnection'a eklendi (oluşturulurken): ${peerUsername} (${peerId})`);
     }
-
     return pc;
 }
 
@@ -359,95 +340,73 @@ async function getInitialMediaPermission() {
 
 async function startAudio() {
     console.log('--- startAudio Fonksiyonu Çağrıldı ---');
-    
-    // Eğer halihazırda bir ses akışı varsa, durdur
-    if (localStream && localStream.active) {
-        console.log('Mevcut localStream durduruluyor.');
-        localStream.getTracks().forEach(track => {
-            track.stop();
-            console.log(`Track durduruldu: ${track.kind}`);
-        });
-        
-        // Mevcut bağlantılardan track'leri kaldır
+    if (localStream && localStream.active) { // Sesi kapatma (Stop Audio)
+        console.log('Mevcut localStream durduruluyor (Stop Audio).');
+        localStream.getTracks().forEach(track => track.stop()); // Tüm track'leri durdur
         Object.values(peerConnections).forEach(pc => {
             if (pc.signalingState !== 'closed') {
                 pc.getSenders().forEach(sender => {
                     if (sender.track) {
-                        try { 
-                            pc.removeTrack(sender);
-                            console.log('Track kaldırıldı:', sender.track.kind);
-                        } catch(e) { 
-                            console.warn("Track kaldırılırken hata:", e); 
-                        }
+                        try { pc.removeTrack(sender); } 
+                        catch(e) { console.warn("Track kaldırılırken hata (Stop Audio):", e); }
                     }
                 });
             }
         });
-
         localStream = null;
         localAudio.srcObject = null;
         startButton.textContent = 'Sesi Başlat';
-        muteButton.classList.add('hidden');
-        console.log('Ses durduruldu ve UI güncellendi.');
+        muteButton.classList.add('hidden'); // Susturma butonunu gizle
+        muteButton.textContent = 'Sustur'; // Metni sıfırla
+        localAudio.muted = true; // Kendi sesimizi duymamak için
+        console.log('Yerel ses durduruldu (Stop Audio).');
         return;
     }
 
-    // Yeni ses akışı başlat
+    // Sesi başlatma (Start Audio)
+    const constraints = { audio: true };
+    console.log('getUserMedia için VARSAYILAN mikrofon isteği:', JSON.stringify(constraints));
+
     try {
-        console.log('Yeni ses akışı talep ediliyor...');
-        localStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                sampleRate: 48000,
-                channelCount: 2
-            }
-        });
-        
-        console.log('Ses akışı başarıyla alındı:', localStream);
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log('Yerel ses akışı (getUserMedia) BAŞARILI:', localStream);
         localAudio.srcObject = localStream;
+        localAudio.muted = true; // Başlangıçta kendi sesimizi duymamak için
         startButton.textContent = 'Sesi Durdur';
-        muteButton.classList.remove('hidden');
+        muteButton.classList.remove('hidden'); // Susturma butonunu göster
+        muteButton.textContent = 'Sustur'; // Başlangıç durumu
 
-        // Tüm peer bağlantılarına yeni ses track'ini ekle
-        Object.entries(peerConnections).forEach(([peerId, pc]) => {
-            if (pc.signalingState !== 'closed') {
-                try {
-                    localStream.getTracks().forEach(track => {
-                        pc.addTrack(track, localStream);
-                        console.log(`Track eklendi: ${track.kind} - Peer: ${peerId}`);
-                    });
-                    
-                    // Yeni offer gönder
-                    initiateOffer(peerId);
-                } catch(e) {
-                    console.error(`Track eklenirken hata (Peer: ${peerId}):`, e);
-                }
-            }
+        // Mevcut/yeni PeerConnection'lara track'leri ekle
+        localStream.getTracks().forEach(track => {
+            Object.values(peerConnections).forEach(pc => {
+                 if (pc.signalingState !== 'closed') {
+                    try { pc.addTrack(track, localStream); }
+                    catch(e) { console.error("Track eklenirken hata (startAudio):", e); }
+                 }
+            });
         });
+        console.log('Yerel ses akışı tüm mevcut PeerConnection\'lara eklendi.');
 
-        // Bekleyen offer ve answer'ları işle
-        if (idsThatNeedMyOffer.size > 0) {
-            console.log('Bekleyen offer\'lar işleniyor...');
-            idsThatNeedMyOffer.forEach(peerId => initiateOffer(peerId));
-            idsThatNeedMyOffer.clear();
-        }
+        // Bekleyen offer'ları gönder
+        idsThatNeedMyOffer.forEach(peerId => {
+            if (peerConnections[peerId]) initiateOffer(peerId);
+        });
+        idsThatNeedMyOffer.clear();
 
-        if (idsThatNeedMyAnswer.size > 0) {
-            console.log('Bekleyen answer\'lar işleniyor...');
-            idsThatNeedMyAnswer.forEach(peerId => sendAnswer(peerId));
-            idsThatNeedMyAnswer.clear();
-        }
+        // Bekleyen answer'ları gönder
+        idsThatNeedMyAnswer.forEach(peerId => {
+            if (peerConnections[peerId]) sendAnswer(peerId);
+        });
+        idsThatNeedMyAnswer.clear();
+
+        console.log('Ses başarıyla başlatıldı ve WebRTC için hazırlandı.');
 
     } catch (err) {
-        console.error('Ses akışı alınırken hata:', err);
-        alert(`Mikrofona erişilemedi: ${err.message}. Lütfen mikrofon izinlerini kontrol edin.`);
+        console.error('Yerel ses akışı (getUserMedia) BAŞARISIZ OLDU:', err.name, err.message);
+        alert(`Varsayılan mikrofona erişilemedi: ${err.name}. İzinleri kontrol edin.`);
         startButton.textContent = 'Sesi Başlat';
         muteButton.classList.add('hidden');
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-        }
+        if (localStream) localStream.getTracks().forEach(track => track.stop());
         localAudio.srcObject = null;
         localStream = null;
     }
@@ -703,63 +662,34 @@ async function startScreenShare() {
         // Ekran paylaşımı için medya akışını al
         screenStream = await navigator.mediaDevices.getDisplayMedia({
             video: {
-                cursor: 'always',
-                displaySurface: 'monitor',
-                logicalSurface: true,
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-                frameRate: { ideal: 30 }
+                cursor: 'always'
             },
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
                 sampleRate: 44100,
-                channelCount: 2,
-                autoGainControl: true,
                 suppressLocalAudioPlayback: false,
-                systemAudio: 'include'
+                systemAudio: 'include' // Sistem sesini dahil et
             }
         });
-
-        console.log('Ekran paylaşımı başlatıldı:', screenStream.getTracks().map(t => t.kind));
 
         const localVideo = document.getElementById('localVideo');
         localVideo.srcObject = screenStream;
 
-        // Her bir peer bağlantısı için video ve ses track'lerini ekle
-        Object.entries(peerConnections).forEach(async ([peerId, pc]) => {
-            try {
-                console.log(`${peerId} için ekran paylaşımı track'leri ekleniyor...`);
-                
-                // Mevcut video track'lerini kaldır
-                const senders = pc.getSenders();
-                const videoSender = senders.find(sender => sender.track?.kind === 'video');
-                if (videoSender) {
-                    await pc.removeTrack(videoSender);
-                    console.log(`${peerId} için eski video track kaldırıldı`);
+        // Mevcut bağlantıları güncelle
+        Object.entries(peerConnections).forEach(([peerId, pc]) => {
+            // Mevcut video track'leri kaldır
+            const senders = pc.getSenders();
+            senders.forEach((sender) => {
+                if (sender.track && sender.track.kind === 'video') {
+                    pc.removeTrack(sender);
                 }
+            });
 
-                // Yeni track'leri ekle
-                screenStream.getTracks().forEach(track => {
-                    pc.addTrack(track, screenStream);
-                    console.log(`${peerId} için ${track.kind} track eklendi`);
-                });
-
-                // Yeni bir offer oluştur ve gönder
-                try {
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    console.log(`${peerId} için yeni offer oluşturuldu ve gönderiliyor`);
-                    socket.emit('offer', {
-                        sdp: pc.localDescription,
-                        targetId: peerId
-                    });
-                } catch (err) {
-                    console.error(`${peerId} için offer oluşturulurken hata:`, err);
-                }
-            } catch (err) {
-                console.error(`${peerId} için ekran paylaşımı track'leri eklenirken hata:`, err);
-            }
+            // Yeni ekran paylaşımı track'lerini ekle
+            screenStream.getTracks().forEach(track => {
+                pc.addTrack(track, screenStream);
+            });
         });
 
         // Ekran paylaşımı durduğunda
@@ -778,57 +708,29 @@ async function startScreenShare() {
     }
 }
 
-async function stopScreenShare() {
+function stopScreenShare() {
     if (screenStream) {
-        console.log('Ekran paylaşımı durduruluyor...');
-        
-        // Tüm track'leri durdur
-        screenStream.getTracks().forEach(track => {
-            track.stop();
-            console.log(`${track.kind} track durduruldu`);
-        });
+        screenStream.getTracks().forEach(track => track.stop());
         screenStream = null;
 
         // Video elementini temizle
         const localVideo = document.getElementById('localVideo');
         localVideo.srcObject = null;
 
-        // Her peer bağlantısı için video track'lerini kaldır ve yeni offer gönder
-        Object.entries(peerConnections).forEach(async ([peerId, pc]) => {
-            try {
-                console.log(`${peerId} için ekran paylaşımı track'leri kaldırılıyor...`);
-                
-                // Video track'lerini kaldır
-                const senders = pc.getSenders();
-                const videoSender = senders.find(sender => sender.track?.kind === 'video');
-                if (videoSender) {
-                    await pc.removeTrack(videoSender);
-                    console.log(`${peerId} için video track kaldırıldı`);
-                }
-
-                // Yeni bir offer oluştur ve gönder
-                try {
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    console.log(`${peerId} için yeni offer oluşturuldu ve gönderiliyor`);
-                    socket.emit('offer', {
-                        sdp: pc.localDescription,
-                        targetId: peerId
-                    });
-                } catch (err) {
-                    console.error(`${peerId} için offer oluşturulurken hata:`, err);
-                }
-            } catch (err) {
-                console.error(`${peerId} için track'ler kaldırılırken hata:`, err);
-            }
-        });
-
         // Buton metnini sıfırla
         const screenShareButton = document.getElementById('screenShareButton');
         screenShareButton.textContent = 'Ekranı Paylaş';
         screenShareButton.style.backgroundColor = '#2196F3';
-        
-        console.log('Ekran paylaşımı durduruldu ve temizlendi');
+
+        // Bağlantıları güncelle ve video track'lerini kaldır
+        Object.entries(peerConnections).forEach(([peerId, pc]) => {
+            const senders = pc.getSenders();
+            senders.forEach((sender) => {
+                if (sender.track && sender.track.kind === 'video') {
+                    pc.removeTrack(sender);
+                }
+            });
+        });
     }
 }
 
