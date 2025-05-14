@@ -1,60 +1,130 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sesli Sohbet ve Mesajlaşma</title>
     <link rel="icon" href="favicon.png" type="image/png">
     <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
-        #joinArea, #appArea { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        :root[data-theme="light"] {
+            --bg-color: #f4f4f4;
+            --container-bg: #fff;
+            --text-color: #333;
+            --border-color: #ddd;
+            --message-bg: #e9ecef;
+            --my-message-bg: #007bff;
+            --my-message-color: white;
+            --chat-header-bg: #f8f9fa;
+            --button-bg: #007bff;
+            --button-color: white;
+            --button-hover: #0056b3;
+            --button-disabled: #ccc;
+        }
+
+        :root[data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --container-bg: #2d2d2d;
+            --text-color: #ffffff;
+            --border-color: #404040;
+            --message-bg: #404040;
+            --my-message-bg: #0056b3;
+            --my-message-color: white;
+            --chat-header-bg: #333333;
+            --button-bg: #0056b3;
+            --button-color: white;
+            --button-hover: #003d82;
+            --button-disabled: #666666;
+        }
+
+        body { 
+            font-family: sans-serif; 
+            margin: 20px; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        #joinArea, #appArea { 
+            background-color: var(--container-bg); 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.1); 
+            margin-bottom: 20px; 
+        }
+
         .hidden { display: none; }
-        h1, h2 { color: #333; }
+        
+        h1, h2 { color: var(--text-color); }
+        
         label { display: block; margin-bottom: 5px; }
-        input[type="text"], button { padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ddd; }
+        
+        input[type="text"], button { 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            border-radius: 4px; 
+            border: 1px solid var(--border-color); 
+            background-color: var(--container-bg);
+            color: var(--text-color);
+        }
+        
         input[type="text"] { width: calc(100% - 22px); }
-        button { background-color: #007bff; color: white; cursor: pointer; border: none; }
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #ccc; }
+        
+        button { 
+            background-color: var(--button-bg); 
+            color: var(--button-color); 
+            cursor: pointer; 
+            border: none; 
+        }
+        
+        button:hover { background-color: var(--button-hover); }
+        button:disabled { background-color: var(--button-disabled); }
+        
         #controls button { margin-right: 10px; }
-        #remoteAudioContainer div { margin-bottom: 15px; padding: 10px; background-color: #e9ecef; border-radius: 4px;}
+        
+        #remoteAudioContainer div { 
+            margin-bottom: 15px; 
+            padding: 10px; 
+            background-color: var(--message-bg); 
+            border-radius: 4px;
+        }
+        
         #remoteAudioContainer p { margin: 0 0 5px 0; font-weight: bold; }
+        
         audio { width: 100%; }
 
-        /* Mesajlaşma stilleri */
         #chatArea { margin-top: 20px; }
+        
         #messages {
             height: 250px;
             overflow-y: auto;
-            border: 1px solid #ccc;
+            border: 1px solid var(--border-color);
             padding: 10px;
             margin-bottom: 10px;
-            background-color: #fff;
+            background-color: var(--container-bg);
             border-radius: 4px;
         }
+        
         .message {
             padding: 8px 12px;
             margin-bottom: 8px;
-            border-radius: 15px; /* Daha balonumsu görünüm */
+            border-radius: 15px;
             max-width: 70%;
             word-wrap: break-word;
         }
-        .message strong {
-            /* Opsiyonel: Kullanıcı adını daha belirgin yapabilirsiniz */
-        }
-        /* Diğer kullanıcıların mesajları */
+
         .message:not(.my-message) {
-            background-color: #e9ecef; /* Açık gri */
-            align-self: flex-start; /* Sola yasla (flex container içinde ise) */
-            margin-right: auto; /* Normal akışta sola itemek için */
+            background-color: var(--message-bg);
+            align-self: flex-start;
+            margin-right: auto;
         }
-        /* Kendi mesajlarımız */
+
         .my-message {
-            background-color: #007bff; /* Mavi */
-            color: white;
-            margin-left: auto; /* Normal akışta sağa itemek için */
-            text-align: left; /* Metni sola yasla (balonun içinde) */
+            background-color: var(--my-message-bg);
+            color: var(--my-message-color);
+            margin-left: auto;
+            text-align: left;
         }
+
         #messageControls { display: flex; }
         #messageInput { flex-grow: 1; margin-right: 10px; margin-bottom: 0;}
         #sendMessageButton { margin-bottom: 0; }
@@ -65,36 +135,11 @@
             right: 20px;
             width: 300px;
             height: 400px;
-            background: white;
+            background: var(--container-bg);
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             display: flex;
             flex-direction: column;
-        }
-        #messages {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
-        #chat-form {
-            padding: 10px;
-            border-top: 1px solid #eee;
-            display: flex;
-        }
-        #chat-input {
-            flex-grow: 1;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 8px;
-        }
-        #chat-submit {
-            padding: 8px 16px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
         }
 
         .chat-header {
@@ -102,32 +147,62 @@
             justify-content: space-between;
             align-items: center;
             padding: 10px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #eee;
+            background: var(--chat-header-bg);
+            border-bottom: 1px solid var(--border-color);
             border-radius: 10px 10px 0 0;
         }
-        
+
         #clear-chat {
             background: none;
             border: none;
             cursor: pointer;
             padding: 5px;
-            color: #666;
+            color: var(--text-color);
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 4px;
             transition: all 0.2s;
         }
-        
+
         #clear-chat:hover {
-            background: #e9ecef;
+            background: var(--message-bg);
             color: #dc3545;
+        }
+
+        /* Dark Mode Toggle Button */
+        #theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background-color: var(--button-bg);
+            color: var(--button-color);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        #theme-toggle:hover {
+            background-color: var(--button-hover);
+            transform: scale(1.1);
         }
 
     </style>
 </head>
 <body>
+    <button id="theme-toggle" title="Tema Değiştir">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+    </button>
+
     <img src="logo.png" alt="Uygulama Logosu" style="width: 120px; display: block; margin-bottom: 20px;">
 
     <div id="joinArea">

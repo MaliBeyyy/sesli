@@ -601,3 +601,39 @@ function connectToSignalingServer(roomCode) {
 document.getElementById('createRoomButton').addEventListener('click', createRoom);
 document.getElementById('joinRoomButton').addEventListener('click', joinRoom);
 document.getElementById('leaveRoomButton').addEventListener('click', leaveRoom);
+
+// Dark Mode işlemleri
+const themeToggle = document.getElementById('theme-toggle');
+const htmlElement = document.documentElement;
+
+// Kullanıcının tercih ettiği temayı localStorage'dan al
+const savedTheme = localStorage.getItem('theme') || 'light';
+htmlElement.setAttribute('data-theme', savedTheme);
+
+// Tema değiştirme fonksiyonu
+function toggleTheme() {
+    const currentTheme = htmlElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    
+    htmlElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    // SVG ikonunu güncelle
+    const path = themeToggle.querySelector('path');
+    if (newTheme === 'dark') {
+        path.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
+    } else {
+        path.setAttribute('d', 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z');
+    }
+}
+
+themeToggle.addEventListener('click', toggleTheme);
+
+// Sayfa yüklendiğinde doğru ikonu göster
+window.addEventListener('load', () => {
+    const currentTheme = htmlElement.getAttribute('data-theme');
+    const path = themeToggle.querySelector('path');
+    if (currentTheme === 'dark') {
+        path.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
+    }
+});
