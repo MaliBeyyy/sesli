@@ -462,6 +462,64 @@ async function initializeApp() {
     }
 }
 
+// --- Mesajlaşma Fonksiyonları ---
+
+// const messageInput = document.getElementById('messageInput'); // KALDIRILACAK
+// const sendMessageButton = document.getElementById('sendMessageButton'); // KALDIRILACAK
+// const messagesDiv = document.getElementById('messages'); // KALDIRILACAK
+
+// const sendMessage = () => {
+//     const messageText = messageInput.value.trim();
+//     if (messageText && socket && myUsername) { 
+//         const messageData = {
+//             text: messageText,
+//         };
+//         socket.emit('new-message', messageData);
+//         appendMessage(myUsername, messageText, true); 
+//         messageInput.value = ''; 
+//     } else if (!myUsername) {
+//         console.warn("Mesaj gönderilemedi: Kullanıcı adı henüz ayarlanmadı.");
+//     } else if (!socket) {
+//         console.warn("Mesaj gönderilemedi: Sunucu bağlantısı yok.");
+//     }
+// }
+
+// const appendMessage = (username, text, isMine) => {
+//     if (!messagesDiv) {
+//         console.error("appendMessage: messagesDiv bulunamadı!");
+//         return;
+//     }
+//     const messageElement = document.createElement('div');
+//     messageElement.classList.add('message');
+//     if (isMine) {
+//         messageElement.classList.add('my-message');
+//     }
+
+//     const usernameElement = document.createElement('strong');
+//     usernameElement.textContent = username + ': ';
+//     
+//     const textNode = document.createTextNode(text);
+
+//     messageElement.appendChild(usernameElement);
+//     messageElement.appendChild(textNode);
+//     
+//     messagesDiv.appendChild(messageElement);
+//     messagesDiv.scrollTop = messagesDiv.scrollHeight; 
+// }
+
+// --- Olay Dinleyicileri (Mesajlaşma için) ---
+// if (sendMessageButton && messageInput) {
+//     sendMessageButton.addEventListener('click', sendMessage);
+
+//     messageInput.addEventListener('keypress', (event) => {
+//         if (event.key === 'Enter') {
+//             sendMessage();
+//         }
+//     });
+// } else {
+//     console.warn("Mesajlaşma butonları veya giriş alanı DOM'da bulunamadı.");
+// }
+
 // --- Sohbet işlemleri ---
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
@@ -547,109 +605,3 @@ function setupChatListeners() {
 }
 
 console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
-
-// Updated portion only: add room creation/join/leave logic to script.js
-
-let currentRoom = null;
-
-function generateRoomCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function createRoom() {
-    const roomCode = generateRoomCode();
-    currentRoom = roomCode;
-
-    // Show app area and hide join area
-    joinArea.classList.add('hidden');
-    appArea.classList.remove('hidden');
-
-    displayUsername.textContent = myUsername || 'Oluşturan'; // optional
-    document.getElementById('roomCodeDisplay').textContent = currentRoom;
-    document.getElementById('leaveRoomButton').classList.remove('hidden');
-    connectToSignalingServer(roomCode);
-    alert(`Oda oluşturuldu: ${roomCode}. Diğer kullanıcıların bu kodla katılmasını bekleyin.`);
-}
-
-function joinRoom() {
-    const roomCode = prompt('Katılmak istediğiniz oda kodunu girin:');
-    if (roomCode && roomCode.length === 6) {
-        currentRoom = roomCode;
-
-        // Show app area and hide join area
-        joinArea.classList.add('hidden');
-        appArea.classList.remove('hidden');
-
-        displayUsername.textContent = myUsername || 'Katılan'; // optional
-        document.getElementById('roomCodeDisplay').textContent = currentRoom;
-        document.getElementById('leaveRoomButton').classList.remove('hidden');
-        connectToSignalingServer(roomCode);
-    } else {
-        alert('Geçerli bir 6 haneli oda kodu girin.');
-    }
-}
-
-function leaveRoom() {
-    if (socket && currentRoom) {
-        socket.emit('leave-room', { room: currentRoom });
-        socket.disconnect();
-        Object.keys(peerConnections).forEach(cleanupPeerConnection);
-        currentRoom = null;
-        alert('Odadan ayrıldınız.');
-        location.reload();
-    }
-}
-
-function connectToSignalingServer(roomCode) {
-    if (socket) return;
-    socket = io(signalingServerUrl, {
-        query: {
-            username: myUsername,
-            room: roomCode
-        },
-        transports: ['websocket', 'polling']
-    });
-
-    // rest of existing connection logic...
-}
-
-// HTML'de butonlara bağla
-document.getElementById('createRoomButton').addEventListener('click', createRoom);
-document.getElementById('joinRoomButton').addEventListener('click', joinRoom);
-document.getElementById('leaveRoomButton').addEventListener('click', leaveRoom);
-
-// Dark Mode işlemleri
-const themeToggle = document.getElementById('theme-toggle');
-const htmlElement = document.documentElement;
-
-// Kullanıcının tercih ettiği temayı localStorage'dan al
-const savedTheme = localStorage.getItem('theme') || 'light';
-htmlElement.setAttribute('data-theme', savedTheme);
-
-// Tema değiştirme fonksiyonu
-function toggleTheme() {
-    const currentTheme = htmlElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    
-    htmlElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    
-    // SVG ikonunu güncelle
-    const path = themeToggle.querySelector('path');
-    if (newTheme === 'dark') {
-        path.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
-    } else {
-        path.setAttribute('d', 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z');
-    }
-}
-
-themeToggle.addEventListener('click', toggleTheme);
-
-// Sayfa yüklendiğinde doğru ikonu göster
-window.addEventListener('load', () => {
-    const currentTheme = htmlElement.getAttribute('data-theme');
-    const path = themeToggle.querySelector('path');
-    if (currentTheme === 'dark') {
-        path.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
-    }
-});
