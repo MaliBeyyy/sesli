@@ -142,3 +142,5 @@ server.listen(PORT, () => {
 app.get('/ping', (req, res) => {
     res.send('pong');
 });
+
+//aliyi götten
