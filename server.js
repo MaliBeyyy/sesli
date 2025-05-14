@@ -133,7 +133,12 @@ io.on('connection', (socket) => {
 
     // Sohbet sistemi için Socket.IO olayları
     socket.on('chat message', (msg) => {
-        io.emit('chat message', msg);
+        console.log('Mesaj alındı:', msg);
+        // Mesajı tüm bağlı kullanıcılara ilet
+        io.emit('chat message', {
+            text: msg.text,
+            sender: msg.sender || 'Misafir'
+        });
     });
 });
 

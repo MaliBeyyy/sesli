@@ -40,6 +40,7 @@ function connectToSignalingServer() {
 
     socket.on('connect', () => {
         console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
+        setupChatListeners(); // Chat listener'larını ekle
     });
 
     socket.on('existing-peers', (peersData) => {
@@ -514,26 +515,48 @@ const messages = document.getElementById('messages');
 
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (chatInput.value) {
+    if (chatInput.value && socket) {
+        console.log('Mesaj gönderiliyor:', chatInput.value);
         // Mesajı gönder
         socket.emit('chat message', {
             text: chatInput.value,
             sender: myUsername || 'Misafir'
         });
+        
+        // Kendi mesajımızı hemen göster
+        const messageElement = document.createElement('div');
+        messageElement.style.margin = '5px';
+        messageElement.style.padding = '8px';
+        messageElement.style.backgroundColor = '#e3f2fd';
+        messageElement.style.borderRadius = '5px';
+        messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${chatInput.value}`;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+        
         chatInput.value = '';
+    } else {
+        console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj boş');
     }
 });
 
-// Gelen mesajları görüntüle
-socket.on('chat message', (msg) => {
-    const messageElement = document.createElement('div');
-    messageElement.style.margin = '5px';
-    messageElement.style.padding = '8px';
-    messageElement.style.backgroundColor = msg.sender === myUsername ? '#e3f2fd' : '#f5f5f5';
-    messageElement.style.borderRadius = '5px';
-    messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
-    messages.appendChild(messageElement);
-    messages.scrollTop = messages.scrollHeight;
-});
+// Socket.IO mesaj olaylarını dinle
+function setupChatListeners() {
+    if (!socket) return;
+    
+    socket.on('chat message', (msg) => {
+        console.log('Mesaj alındı:', msg);
+        // Kendi mesajlarımızı tekrar gösterme (zaten gösterildi)
+        if (msg.sender === myUsername) return;
+        
+        const messageElement = document.createElement('div');
+        messageElement.style.margin = '5px';
+        messageElement.style.padding = '8px';
+        messageElement.style.backgroundColor = '#f5f5f5';
+        messageElement.style.borderRadius = '5px';
+        messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+    });
+}
 
 console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
