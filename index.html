@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sesli Sohbet ve Mesajlaşma</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        #joinArea, #appArea { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .hidden { display: none; }
+        h1, h2 { color: #333; }
+        label { display: block; margin-bottom: 5px; }
+        input[type="text"], button { padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ddd; }
+        input[type="text"] { width: calc(100% - 22px); }
+        button { background-color: #007bff; color: white; cursor: pointer; border: none; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; }
+        #controls button { margin-right: 10px; }
+        #remoteAudioContainer div { margin-bottom: 15px; padding: 10px; background-color: #e9ecef; border-radius: 4px;}
+        #remoteAudioContainer p { margin: 0 0 5px 0; font-weight: bold; }
+        audio { width: 100%; }
+
+        /* Mesajlaşma stilleri */
+        #chatArea { margin-top: 20px; }
+        #messages {
+            height: 250px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #fff;
+            border-radius: 4px;
+        }
+        .message {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 15px; /* Daha balonumsu görünüm */
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        .message strong {
+            /* Opsiyonel: Kullanıcı adını daha belirgin yapabilirsiniz */
+        }
+        /* Diğer kullanıcıların mesajları */
+        .message:not(.my-message) {
+            background-color: #e9ecef; /* Açık gri */
+            align-self: flex-start; /* Sola yasla (flex container içinde ise) */
+            margin-right: auto; /* Normal akışta sola itemek için */
+        }
+        /* Kendi mesajlarımız */
+        .my-message {
+            background-color: #007bff; /* Mavi */
+            color: white;
+            margin-left: auto; /* Normal akışta sağa itemek için */
+            text-align: left; /* Metni sola yasla (balonun içinde) */
+        }
+        #messageControls { display: flex; }
+        #messageInput { flex-grow: 1; margin-right: 10px; margin-bottom: 0;}
+        #sendMessageButton { margin-bottom: 0; }
+
+    </style>
+</head>
+<body>
+    <div id="joinArea">
+        <h1>Sohbete Katıl</h1>
+        <label for="usernameInput">Kullanıcı Adı:</label>
+        <input type="text" id="usernameInput" placeholder="Kullanıcı adınızı girin">
+        <button id="joinButton">Katıl</button>
+    </div>
+
+    <div id="appArea" class="hidden">
+        <h1>Hoş Geldin, <span id="displayUsername"></span>!</h1>
+        
+        <div id="controls">
+            <button id="startButton" disabled>Sesi Başlat</button>
+            <button id="muteButton" class="hidden">Sustur</button>
+        </div>
+
+        <h2>Ses Akışları</h2>
+        <div>
+            <h3>Kendi Sesin (Duyulmayacak)</h3>
+            <audio id="localAudio" muted controls></audio>
+        </div>
+        <div id="remoteAudioContainer">
+            <h3>Diğer Kullanıcılar</h3>
+            <!-- Uzak sesler buraya eklenecek -->
+        </div>
+    </div>
+
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
