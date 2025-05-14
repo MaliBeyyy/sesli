@@ -137,3 +137,8 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Sinyalleşme sunucusu ${PORT} portunda çalışıyor (${MAX_PEERS_IN_ROOM} kişilik odalar)...`);
 });
+
+// server.js dosyasının uygun bir yerine (diğer app.use'lardan sonra, server.listen'den önce)
+app.get('/ping', (req, res) => {
+    res.send('pong');
+});
