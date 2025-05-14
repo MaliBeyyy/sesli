@@ -79,7 +79,70 @@
         button:hover { background-color: var(--button-hover); }
         button:disabled { background-color: var(--button-disabled); }
         
-        #controls button { margin-right: 10px; }
+        #controls button {
+            margin-right: 10px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--button-bg);
+            color: var(--button-color);
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #controls button:hover {
+            background-color: var(--button-hover);
+        }
+
+        #controls button:disabled {
+            background-color: var(--button-disabled);
+            cursor: not-allowed;
+        }
+
+        #controls button.hidden {
+            display: none;
+        }
+
+        #screenShareButton {
+            background-color: #28a745 !important;
+        }
+
+        #screenShareButton:hover {
+            background-color: #218838 !important;
+        }
+
+        #stopScreenShareButton {
+            background-color: #dc3545 !important;
+        }
+
+        #stopScreenShareButton:hover {
+            background-color: #c82333 !important;
+        }
+
+        /* Video container stilleri */
+        #remoteVideoContainer {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .video-wrapper {
+            background-color: var(--container-bg);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .video-wrapper video {
+            width: 100%;
+            border-radius: 4px;
+        }
+
+        .video-wrapper p {
+            margin: 10px 0;
+            font-weight: bold;
+        }
         
         #remoteAudioContainer div { 
             margin-bottom: 15px; 
@@ -218,6 +281,8 @@
         <div id="controls">
             <button id="startButton" disabled>Sesi Başlat</button>
             <button id="muteButton" class="hidden">Sustur</button>
+            <button id="screenShareButton" class="hidden">Ekranı Paylaş</button>
+            <button id="stopScreenShareButton" class="hidden">Ekran Paylaşımını Durdur</button>
         </div>
 
         <h2>Ses Akışları</h2>
@@ -228,6 +293,11 @@
         <div id="remoteAudioContainer">
             <h3>Diğer Kullanıcılar</h3>
             <!-- Uzak sesler buraya eklenecek -->
+        </div>
+        
+        <div id="remoteVideoContainer">
+            <h3>Ekran Paylaşımları</h3>
+            <!-- Uzak videolar buraya eklenecek -->
         </div>
     </div>
 

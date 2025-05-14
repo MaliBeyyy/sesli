@@ -6,12 +6,16 @@ const displayUsername = document.getElementById('displayUsername');
 
 const startButton = document.getElementById('startButton');
 const muteButton = document.getElementById('muteButton');
+const screenShareButton = document.getElementById('screenShareButton');
+const stopScreenShareButton = document.getElementById('stopScreenShareButton');
 const localAudio = document.getElementById('localAudio');
 const remoteAudioContainer = document.getElementById('remoteAudioContainer');
 
 let localStream;
+let screenStream;
 const peerConnections = {}; // { peerId: RTCPeerConnection }
-const remoteAudioElements = {}; // { peerId: {div: HTMLDivElement, audio: HTMLAudioElement} } - Artık div'i de saklıyoruz
+const remoteAudioElements = {}; // { peerId: {div: HTMLDivElement, audio: HTMLAudioElement} }
+const remoteVideoElements = {}; // { peerId: {div: HTMLDivElement, video: HTMLVideoElement} }
 let socket;
 const signalingServerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
     ? `http://${window.location.hostname}:3000` 
@@ -237,35 +241,7 @@ function createPeerConnection(peerId, peerUsername = 'Diğer Kullanıcı') {
         }
     };
 
-    pc.ontrack = (event) => {
-        console.log(`Uzak ses akışı (track) alındı: ${peerUsername} (${peerId}) kullanıcısından`);
-        let audioWrapper = remoteAudioElements[peerId];
-        if (!audioWrapper) {
-            const peerDiv = document.createElement('div');
-            peerDiv.id = `remoteAudioDiv-${peerId}`;
-            peerDiv.style.marginBottom = '10px';
-
-            const label = document.createElement('p');
-            label.textContent = `${peerUsername} (${peerId.substring(0, 6)}...):`;
-            label.style.margin = '0 0 5px 0';
-
-            const remoteAudio = document.createElement('audio');
-            remoteAudio.autoplay = true;
-            remoteAudio.controls = true;
-            
-            peerDiv.appendChild(label);
-            peerDiv.appendChild(remoteAudio);
-            remoteAudioContainer.appendChild(peerDiv);
-            
-            remoteAudioElements[peerId] = { div: peerDiv, audio: remoteAudio, username: peerUsername };
-            audioWrapper = remoteAudioElements[peerId];
-            console.log(`Uzak ses için audio elementi oluşturuldu ve eklendi: ${peerUsername} (${peerId})`);
-        }
-        if (audioWrapper.audio.srcObject !== event.streams[0]) {
-            audioWrapper.audio.srcObject = event.streams[0];
-            console.log(`Uzak ses akışı (${peerUsername} (${peerId}) kullanıcısından) audio elementine atandı.`);
-        }
-    };
+    updatePeerConnectionTrackHandler(pc, peerId, peerUsername);
 
     pc.oniceconnectionstatechange = () => {
         if (pc) {
@@ -284,6 +260,15 @@ function createPeerConnection(peerId, peerUsername = 'Diğer Kullanıcı') {
         });
         console.log(`Yerel ses akışı PeerConnection'a eklendi (oluşturulurken): ${peerUsername} (${peerId})`);
     }
+
+    if (screenStream && screenStream.active) {
+        screenStream.getTracks().forEach(track => {
+            try {
+                pc.addTrack(track, screenStream);
+            } catch(e) { console.error(`Ekran paylaşımı track'i eklenirken hata (createPeerConnection for ${peerUsername} - ${peerId}):`, e); }
+        });
+    }
+
     return pc;
 }
 
@@ -348,12 +333,19 @@ function cleanupPeerConnection(peerId) {
         delete peerConnections[peerId];
         console.log(`PeerConnection temizlendi: ${peerId}`);
     }
+
     const audioWrapper = remoteAudioElements[peerId];
     if (audioWrapper && audioWrapper.div) {
         audioWrapper.div.remove();
         delete remoteAudioElements[peerId];
-        console.log(`Uzak ses elementi temizlendi: ${peerId}`);
     }
+
+    const videoWrapper = remoteVideoElements[peerId];
+    if (videoWrapper && videoWrapper.div) {
+        videoWrapper.div.remove();
+        delete remoteVideoElements[peerId];
+    }
+
     idsThatNeedMyOffer.delete(peerId);
     idsThatNeedMyAnswer.delete(peerId);
 }
@@ -471,17 +463,23 @@ startButton.addEventListener('click', startAudio);
 muteButton.addEventListener('click', toggleMute); // Yeni olay dinleyici
 
 // --- Başlangıç ve Kullanıcı Adı Yönetimi ---
-joinButton.addEventListener('click', () => {
+joinButton.addEventListener('click', async () => {
     const username = usernameInput.value.trim();
     if (username) {
+        joinArea.classList.add('hidden');
+        appArea.classList.remove('hidden');
+        displayUsername.textContent = username;
         myUsername = username;
-        displayUsername.textContent = myUsername; // Kullanıcı adını göster
-        joinArea.classList.add('hidden'); // Katılma alanını gizle
-        appArea.classList.remove('hidden'); // Ana uygulama alanını göster
-        
-        initializeApp(); // Medya izinlerini al ve sunucuya bağlan
+
+        const hasPermission = await getInitialMediaPermission();
+        if (hasPermission) {
+            startButton.disabled = false;
+            screenShareButton.classList.remove('hidden');
+        }
+
+        connectToSignalingServer();
     } else {
-        alert("Lütfen bir kullanıcı adı girin.");
+        alert('Lütfen bir kullanıcı adı girin!');
     }
 });
 
@@ -584,3 +582,116 @@ function setupChatListeners() {
 }
 
 console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
+
+// Ekran paylaşımı fonksiyonları
+async function startScreenShare() {
+    try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+            video: true,
+            audio: true 
+        });
+        
+        screenShareButton.classList.add('hidden');
+        stopScreenShareButton.classList.remove('hidden');
+
+        // Ekran paylaşımını tüm bağlantılara ekle
+        Object.keys(peerConnections).forEach(async (peerId) => {
+            const pc = peerConnections[peerId];
+            if (pc && pc.signalingState === 'stable') {
+                screenStream.getTracks().forEach(track => {
+                    pc.addTrack(track, screenStream);
+                });
+                await initiateOffer(peerId);
+            }
+        });
+
+        // Ekran paylaşımı durduğunda
+        screenStream.getVideoTracks()[0].onended = () => {
+            stopScreenShare();
+        };
+
+    } catch (error) {
+        console.error('Ekran paylaşımı başlatılırken hata:', error);
+        alert('Ekran paylaşımı başlatılamadı: ' + error.message);
+    }
+}
+
+function stopScreenShare() {
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => {
+            track.stop();
+            Object.values(peerConnections).forEach(pc => {
+                const sender = pc.getSenders().find(s => s.track === track);
+                if (sender) {
+                    pc.removeTrack(sender);
+                }
+            });
+        });
+        screenStream = null;
+        screenShareButton.classList.remove('hidden');
+        stopScreenShareButton.classList.add('hidden');
+    }
+}
+
+// Event listeners
+screenShareButton.addEventListener('click', startScreenShare);
+stopScreenShareButton.addEventListener('click', stopScreenShare);
+
+// Uzak video elementini oluşturma fonksiyonu
+function createRemoteVideo(peerId, peerUsername) {
+    const videoWrapper = document.createElement('div');
+    videoWrapper.id = `remoteVideoDiv-${peerId}`;
+    videoWrapper.style.marginBottom = '10px';
+
+    const label = document.createElement('p');
+    label.textContent = `${peerUsername} Ekran Paylaşımı`;
+
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.playsInline = true;
+    video.style.maxWidth = '100%';
+    
+    videoWrapper.appendChild(label);
+    videoWrapper.appendChild(video);
+    remoteAudioContainer.appendChild(videoWrapper);
+    
+    return { div: videoWrapper, video: video };
+}
+
+// PeerConnection track handler'ını güncelle
+function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
+    pc.ontrack = (event) => {
+        console.log(`Uzak medya akışı alındı: ${peerUsername} (${peerId}) kullanıcısından`);
+        
+        if (event.track.kind === 'audio') {
+            let audioWrapper = remoteAudioElements[peerId];
+            if (!audioWrapper) {
+                const peerDiv = document.createElement('div');
+                peerDiv.id = `remoteAudioDiv-${peerId}`;
+                peerDiv.style.marginBottom = '10px';
+
+                const label = document.createElement('p');
+                label.textContent = `${peerUsername} (${peerId.substring(0, 6)}...):`;
+
+                const remoteAudio = document.createElement('audio');
+                remoteAudio.autoplay = true;
+                remoteAudio.controls = true;
+                
+                peerDiv.appendChild(label);
+                peerDiv.appendChild(remoteAudio);
+                remoteAudioContainer.appendChild(peerDiv);
+                
+                remoteAudioElements[peerId] = { div: peerDiv, audio: remoteAudio, username: peerUsername };
+                audioWrapper = remoteAudioElements[peerId];
+            }
+            audioWrapper.audio.srcObject = event.streams[0];
+        } else if (event.track.kind === 'video') {
+            let videoWrapper = remoteVideoElements[peerId];
+            if (!videoWrapper) {
+                videoWrapper = createRemoteVideo(peerId, peerUsername);
+                remoteVideoElements[peerId] = videoWrapper;
+            }
+            videoWrapper.video.srcObject = event.streams[0];
+        }
+    };
+}
