@@ -5,6 +5,7 @@ const path = require('path');
 
 const app = express();
 
+// CORS middleware
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -12,9 +13,13 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(express.static(path.join(__dirname, '/')));
+// Statik dosyaları sunmak için (index.html ve script.js)
+// Bu dosyaların projenizin kök dizininde olduğunu varsayıyoruz.
+app.use(express.static(path.join(__dirname, '/'))); 
 
 const server = http.createServer(app);
+
+// Socket.IO yapılandırması
 const io = socketIO(server, {
     cors: {
         origin: "*",
@@ -25,116 +30,125 @@ const io = socketIO(server, {
     transports: ['websocket', 'polling']
 });
 
-let rooms = {}; // { roomCode: { socketId: { socket, username } } }
+let roomPeers = {}; // Odadaki kullanıcıları socket.id'leri ile saklayacağız: { socketId: socketNesnesi }
 
 io.on('connection', (socket) => {
-    const rawUsername = socket.handshake.query.username;
-    const roomCode = socket.handshake.query.room;
-    const processedUsername = rawUsername && rawUsername.trim() !== '' ? rawUsername.trim() : 'AnonimKullanici';
+    // Bağlantı sırasında query'den kullanıcı adını al
+    const clientQueryUsername = socket.handshake.query.username;
+    let processedUsername = clientQueryUsername;
 
-    if (!roomCode) {
-        console.warn(`[Sunucu] room parametresi eksik: ID=${socket.id}`);
-        socket.disconnect();
-        return;
+    if (typeof clientQueryUsername === 'undefined' || clientQueryUsername === null || String(clientQueryUsername).trim() === '') {
+        processedUsername = 'AnonimKullanici';
     }
+    
+    console.log(`[Sunucu] Yeni bağlantı: ID=${socket.id}. İstemciden gelen query.username='${clientQueryUsername}' (tip: ${typeof clientQueryUsername}). İşlenmiş username='${processedUsername}'`);
 
-    if (!rooms[roomCode]) {
-        rooms[roomCode] = {};
-    }
+    // --- existing-peers için loglama (önceki gibi kalabilir veya basitleştirilebilir) ---
+    // console.log('[Sunucu] "existing-peers" için roomPeers durumu:', JSON.stringify(roomPeers, (key, value) => (key === 'socket' ? '[SocketObject]' : value), 2));
+    const existingPeersData = Object.entries(roomPeers).map(([id, data]) => ({ id, username: data.username }));
+    // console.log(`[Sunucu] "existing-peers" olayı ile ${socket.id} (${processedUsername}) kullanıcısına gönderilecek veri:`, JSON.stringify(existingPeersData, null, 2));
+    socket.emit('existing-peers', existingPeersData);
+    // --- existing-peers loglama sonu ---
 
-    // Odaya katıl
-    socket.join(roomCode);
-    rooms[roomCode][socket.id] = { socket, username: processedUsername };
 
-    console.log(`[Sunucu] Kullanıcı bağlandı: ${processedUsername} (${socket.id}) - Oda: ${roomCode}`);
-
-    // Yeni kullanıcıya mevcut katılımcı listesini gönder
-    const existingPeers = Object.entries(rooms[roomCode])
-        .filter(([id]) => id !== socket.id)
-        .map(([id, data]) => ({ id, username: data.username }));
-    socket.emit('existing-peers', existingPeers);
-
-    // Diğer kullanıcılara bu kişinin katıldığını bildir
-    socket.to(roomCode).emit('peer-joined', {
-        newPeerId: socket.id,
-        username: processedUsername
+    // Odadaki mevcut diğer kullanıcılara yeni katılan kullanıcının ID'sini ve kullanıcı adını bildir
+    Object.values(roomPeers).forEach(existingPeerData => {
+        if (existingPeerData.socket && existingPeerData.socket.id !== socket.id) { // Kendisine göndermesin
+            const eventDataForPeerJoined = { newPeerId: socket.id, username: processedUsername };
+            console.log(`[Sunucu] 'peer-joined' olayı ${existingPeerData.username} (${existingPeerData.socket.id}) kullanıcısına gönderiliyor. Veri: ${JSON.stringify(eventDataForPeerJoined)}`);
+            existingPeerData.socket.emit('peer-joined', eventDataForPeerJoined);
+        }
     });
+    if (Object.keys(roomPeers).length > 0) {
+      console.log(`[Sunucu] Mevcut kullanıcılara yeni kullanıcı ${processedUsername} (${socket.id}) bilgisi (peer-joined yoluyla) gönderildi.`);
+    }
 
-    // Teklif (offer) iletimi
+    // Yeni kullanıcıyı odaya ekle
+    roomPeers[socket.id] = { socket: socket, username: processedUsername };
+    console.log(`[Sunucu] ${processedUsername} (${socket.id}) odaya eklendi. Odadaki kullanıcı sayısı: ${Object.keys(roomPeers).length}`);
+
+
     socket.on('offer', (data) => {
-        const target = rooms[roomCode]?.[data.targetId];
-        if (target) {
-            target.socket.emit('offer', {
-                sdp: data.sdp,
-                fromId: socket.id,
-                fromUsername: processedUsername
+        const targetPeerData = roomPeers[data.targetId];
+        const senderUsername = roomPeers[socket.id]?.username || socket.id; // veya processedUsername (eğer bu socket içinse)
+        const targetUsername = targetPeerData?.username || data.targetId;
+        if (targetPeerData && targetPeerData.socket) {
+            console.log(`[Sunucu] Offer iletiliyor: ${senderUsername} -> ${targetUsername}`);
+            targetPeerData.socket.emit('offer', { 
+                sdp: data.sdp, 
+                fromId: socket.id, 
+                fromUsername: senderUsername 
             });
+        } else {
+            console.warn(`[Sunucu] Offer için hedef (${targetUsername}) bulunamadı. Gönderen: ${senderUsername}`);
         }
     });
 
-    // Yanıt (answer) iletimi
     socket.on('answer', (data) => {
-        const target = rooms[roomCode]?.[data.targetId];
-        if (target) {
-            target.socket.emit('answer', {
-                sdp: data.sdp,
+        const targetPeerData = roomPeers[data.targetId];
+        const senderUsername = roomPeers[socket.id]?.username || socket.id;
+        const targetUsername = targetPeerData?.username || data.targetId;
+        if (targetPeerData && targetPeerData.socket) {
+            console.log(`[Sunucu] Answer iletiliyor: ${senderUsername} -> ${targetUsername}`);
+            targetPeerData.socket.emit('answer', { 
+                sdp: data.sdp, 
                 fromId: socket.id,
-                fromUsername: processedUsername
+                fromUsername: senderUsername
             });
+        } else {
+            console.warn(`[Sunucu] Answer için hedef (${targetUsername}) bulunamadı. Gönderen: ${senderUsername}`);
         }
     });
 
-    // ICE Candidate iletimi
     socket.on('ice-candidate', (data) => {
-        const target = rooms[roomCode]?.[data.targetId];
-        if (target) {
-            target.socket.emit('ice-candidate', {
-                candidate: data.candidate,
-                fromId: socket.id
+        const targetPeerData = roomPeers[data.targetId];
+        if (targetPeerData && targetPeerData.socket) {
+            targetPeerData.socket.emit('ice-candidate', { 
+                candidate: data.candidate, 
+                fromId: socket.id,
             });
         }
     });
 
-    // Odadan ayrılma isteği
-    socket.on('leave-room', ({ room }) => {
-        if (rooms[room] && rooms[room][socket.id]) {
-            delete rooms[room][socket.id];
-            socket.leave(room);
-            socket.to(room).emit('peer-left', socket.id);
-            console.log(`[Sunucu] ${processedUsername} (${socket.id}) odadan ayrıldı: ${room}`);
-            if (Object.keys(rooms[room]).length === 0) {
-                delete rooms[room];
-            }
-        }
-    });
-
-    // Bağlantı kesildiğinde
     socket.on('disconnect', () => {
-        if (rooms[roomCode] && rooms[roomCode][socket.id]) {
-            delete rooms[roomCode][socket.id];
-            socket.to(roomCode).emit('peer-left', socket.id);
-            console.log(`[Sunucu] ${processedUsername} (${socket.id}) bağlantıyı kapattı ve odadan çıkarıldı: ${roomCode}`);
-            if (Object.keys(rooms[roomCode]).length === 0) {
-                delete rooms[roomCode];
+        const disconnectedUser = roomPeers[socket.id];
+        const disconnectedUsername = disconnectedUser ? disconnectedUser.username : 'Bilinmeyen';
+        console.log(`[Sunucu] Kullanıcı ayrıldı: ${disconnectedUsername} (ID: ${socket.id})`);
+        
+        const wasInRoom = !!roomPeers[socket.id];
+        delete roomPeers[socket.id]; 
+        
+        if (wasInRoom) { 
+            console.log(`[Sunucu] ${disconnectedUsername} (${socket.id}) odadan çıkarıldı. Kalan kullanıcı sayısı: ${Object.keys(roomPeers).length}`);
+            Object.values(roomPeers).forEach(peerData => {
+                if (peerData.socket) {
+                    peerData.socket.emit('peer-left', socket.id);
+                }
+            });
+            if (Object.keys(roomPeers).length > 0) {
+                console.log(`[Sunucu] Kalan kullanıcılara ${disconnectedUsername} (${socket.id}) kullanıcısının ayrıldığı bildirildi.`);
             }
         }
     });
 
-    // Mesajlaşma
+    // Sohbet sistemi için Socket.IO olayları
     socket.on('chat message', (msg) => {
-        socket.to(roomCode).emit('chat message', {
+        console.log('Mesaj alındı:', msg);
+        // Mesajı tüm bağlı kullanıcılara ilet
+        io.emit('chat message', {
             text: msg.text,
             sender: msg.sender || 'Misafir'
         });
     });
 });
 
-// Test endpoint
-app.get('/ping', (req, res) => {
-    res.send('pong');
+// Dinamik port veya varsayılan 3000
+const PORT = process.env.PORT || 3000; 
+server.listen(PORT, () => {
+    console.log(`Sinyalleşme sunucusu ${PORT} portunda çalışıyor...`);
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor...`);
+// server.js dosyasının uygun bir yerine (diğer app.use'lardan sonra, server.listen'den önce)
+app.get('/ping', (req, res) => {
+    res.send('pong');
 });

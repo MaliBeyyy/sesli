@@ -1,7 +1,3 @@
-let currentRoom = null;
-function generateRoomCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
 const joinArea = document.getElementById('joinArea');
 const usernameInput = document.getElementById('usernameInput');
 const joinButton = document.getElementById('joinButton');
@@ -474,9 +470,6 @@ function toggleMute() {
 startButton.addEventListener('click', startAudio);
 muteButton.addEventListener('click', toggleMute); // Yeni olay dinleyici
 
-document.getElementById('createRoomButton').addEventListener('click', createRoom);
-document.getElementById('joinRoomButton').addEventListener('click', joinRoom);
-document.getElementById('leaveRoomButton').addEventListener('click', leaveRoom);
 // --- Başlangıç ve Kullanıcı Adı Yönetimi ---
 joinButton.addEventListener('click', () => {
     const username = usernameInput.value.trim();
@@ -505,52 +498,6 @@ async function initializeApp() {
     }
 }
 
-function createRoom() {
-    const username = usernameInput.value.trim();
-    if (!username) {
-        alert("Lütfen bir kullanıcı adı girin.");
-        return;
-    }
-    myUsername = username;
-    currentRoom = generateRoomCode();
-
-    displayUsername.textContent = myUsername;
-    document.getElementById('roomCodeDisplay').textContent = currentRoom;
-
-    joinArea.classList.add('hidden');
-    appArea.classList.remove('hidden');
-    document.getElementById('leaveRoomButton').classList.remove('hidden');
-
-    initializeApp(); // this triggers permission + connection
-}
-
-function joinRoom() {
-    const username = usernameInput.value.trim();
-    const inputCode = prompt("Katılmak istediğiniz oda kodunu girin (6 hane):");
-    if (!username || !inputCode || inputCode.length !== 6) {
-        alert("Geçerli kullanıcı adı ve oda kodu girin.");
-        return;
-    }
-    myUsername = username;
-    currentRoom = inputCode;
-
-    displayUsername.textContent = myUsername;
-    document.getElementById('roomCodeDisplay').textContent = currentRoom;
-
-    joinArea.classList.add('hidden');
-    appArea.classList.remove('hidden');
-    document.getElementById('leaveRoomButton').classList.remove('hidden');
-
-    initializeApp();
-}
-
-function leaveRoom() {
-    if (socket && currentRoom) {
-        socket.emit('leave-room', { room: currentRoom });
-        socket.disconnect();
-    }
-    location.reload(); // reload to reset state
-}
 
 // --- Sohbet işlemleri ---
 const chatForm = document.getElementById('chat-form');
