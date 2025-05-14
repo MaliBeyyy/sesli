@@ -462,64 +462,6 @@ async function initializeApp() {
     }
 }
 
-// --- Mesajlaşma Fonksiyonları ---
-
-// const messageInput = document.getElementById('messageInput'); // KALDIRILACAK
-// const sendMessageButton = document.getElementById('sendMessageButton'); // KALDIRILACAK
-// const messagesDiv = document.getElementById('messages'); // KALDIRILACAK
-
-// const sendMessage = () => {
-//     const messageText = messageInput.value.trim();
-//     if (messageText && socket && myUsername) { 
-//         const messageData = {
-//             text: messageText,
-//         };
-//         socket.emit('new-message', messageData);
-//         appendMessage(myUsername, messageText, true); 
-//         messageInput.value = ''; 
-//     } else if (!myUsername) {
-//         console.warn("Mesaj gönderilemedi: Kullanıcı adı henüz ayarlanmadı.");
-//     } else if (!socket) {
-//         console.warn("Mesaj gönderilemedi: Sunucu bağlantısı yok.");
-//     }
-// }
-
-// const appendMessage = (username, text, isMine) => {
-//     if (!messagesDiv) {
-//         console.error("appendMessage: messagesDiv bulunamadı!");
-//         return;
-//     }
-//     const messageElement = document.createElement('div');
-//     messageElement.classList.add('message');
-//     if (isMine) {
-//         messageElement.classList.add('my-message');
-//     }
-
-//     const usernameElement = document.createElement('strong');
-//     usernameElement.textContent = username + ': ';
-//     
-//     const textNode = document.createTextNode(text);
-
-//     messageElement.appendChild(usernameElement);
-//     messageElement.appendChild(textNode);
-//     
-//     messagesDiv.appendChild(messageElement);
-//     messagesDiv.scrollTop = messagesDiv.scrollHeight; 
-// }
-
-// --- Olay Dinleyicileri (Mesajlaşma için) ---
-// if (sendMessageButton && messageInput) {
-//     sendMessageButton.addEventListener('click', sendMessage);
-
-//     messageInput.addEventListener('keypress', (event) => {
-//         if (event.key === 'Enter') {
-//             sendMessage();
-//         }
-//     });
-// } else {
-//     console.warn("Mesajlaşma butonları veya giriş alanı DOM'da bulunamadı.");
-// }
-
 // --- Sohbet işlemleri ---
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
@@ -605,3 +547,57 @@ function setupChatListeners() {
 }
 
 console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
+
+// Updated portion only: add room creation/join/leave logic to script.js
+
+let currentRoom = null;
+
+function generateRoomCode() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function createRoom() {
+    const roomCode = generateRoomCode();
+    currentRoom = roomCode;
+    connectToSignalingServer(roomCode);
+    alert(`Oda oluşturuldu: ${roomCode}`);
+}
+
+function joinRoom() {
+    const roomCode = prompt('Katılmak istediğiniz oda kodunu girin:');
+    if (roomCode && roomCode.length === 6) {
+        currentRoom = roomCode;
+        connectToSignalingServer(roomCode);
+    } else {
+        alert('Geçerli bir 6 haneli oda kodu girin.');
+    }
+}
+
+function leaveRoom() {
+    if (socket && currentRoom) {
+        socket.emit('leave-room', { room: currentRoom });
+        socket.disconnect();
+        Object.keys(peerConnections).forEach(cleanupPeerConnection);
+        currentRoom = null;
+        alert('Odadan ayrıldınız.');
+        location.reload();
+    }
+}
+
+function connectToSignalingServer(roomCode) {
+    if (socket) return;
+    socket = io(signalingServerUrl, {
+        query: {
+            username: myUsername,
+            room: roomCode
+        },
+        transports: ['websocket', 'polling']
+    });
+
+    // rest of existing connection logic...
+}
+
+// HTML'de butonlara bağla
+document.getElementById('createRoomButton').addEventListener('click', createRoom);
+document.getElementById('joinRoomButton').addEventListener('click', joinRoom);
+document.getElementById('leaveRoomButton').addEventListener('click', leaveRoom);
