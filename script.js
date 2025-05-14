@@ -649,3 +649,95 @@ window.addEventListener('load', () => {
         path.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
     }
 });
+
+// Ekran paylaşımı için yeni fonksiyonlar
+let screenStream = null;
+
+async function startScreenShare() {
+    try {
+        // Ekran paylaşımı için medya akışını al
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                cursor: 'always'
+            },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                sampleRate: 44100,
+                suppressLocalAudioPlayback: false,
+                systemAudio: 'include' // Sistem sesini dahil et
+            }
+        });
+
+        const localVideo = document.getElementById('localVideo');
+        localVideo.srcObject = screenStream;
+
+        // Mevcut bağlantıları güncelle
+        Object.entries(peerConnections).forEach(([peerId, pc]) => {
+            // Mevcut video track'leri kaldır
+            const senders = pc.getSenders();
+            senders.forEach((sender) => {
+                if (sender.track && sender.track.kind === 'video') {
+                    pc.removeTrack(sender);
+                }
+            });
+
+            // Yeni ekran paylaşımı track'lerini ekle
+            screenStream.getTracks().forEach(track => {
+                pc.addTrack(track, screenStream);
+            });
+        });
+
+        // Ekran paylaşımı durduğunda
+        screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+            stopScreenShare();
+        });
+
+        // Buton metnini güncelle
+        const screenShareButton = document.getElementById('screenShareButton');
+        screenShareButton.textContent = 'Paylaşımı Durdur';
+        screenShareButton.style.backgroundColor = '#dc3545';
+
+    } catch (err) {
+        console.error('Ekran paylaşımı başlatılırken hata:', err);
+        alert('Ekran paylaşımı başlatılamadı: ' + err.message);
+    }
+}
+
+function stopScreenShare() {
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+        screenStream = null;
+
+        // Video elementini temizle
+        const localVideo = document.getElementById('localVideo');
+        localVideo.srcObject = null;
+
+        // Buton metnini sıfırla
+        const screenShareButton = document.getElementById('screenShareButton');
+        screenShareButton.textContent = 'Ekranı Paylaş';
+        screenShareButton.style.backgroundColor = '#2196F3';
+
+        // Bağlantıları güncelle ve video track'lerini kaldır
+        Object.entries(peerConnections).forEach(([peerId, pc]) => {
+            const senders = pc.getSenders();
+            senders.forEach((sender) => {
+                if (sender.track && sender.track.kind === 'video') {
+                    pc.removeTrack(sender);
+                }
+            });
+        });
+    }
+}
+
+// Event listener'ları ekle
+document.addEventListener('DOMContentLoaded', () => {
+    const screenShareButton = document.getElementById('screenShareButton');
+    screenShareButton.addEventListener('click', () => {
+        if (!screenStream) {
+            startScreenShare();
+        } else {
+            stopScreenShare();
+        }
+    });
+});
