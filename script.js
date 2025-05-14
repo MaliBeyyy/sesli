@@ -462,63 +462,6 @@ async function initializeApp() {
     }
 }
 
-// --- Mesajlaşma Fonksiyonları ---
-
-// const messageInput = document.getElementById('messageInput'); // KALDIRILACAK
-// const sendMessageButton = document.getElementById('sendMessageButton'); // KALDIRILACAK
-// const messagesDiv = document.getElementById('messages'); // KALDIRILACAK
-
-// const sendMessage = () => {
-//     const messageText = messageInput.value.trim();
-//     if (messageText && socket && myUsername) { 
-//         const messageData = {
-//             text: messageText,
-//         };
-//         socket.emit('new-message', messageData);
-//         appendMessage(myUsername, messageText, true); 
-//         messageInput.value = ''; 
-//     } else if (!myUsername) {
-//         console.warn("Mesaj gönderilemedi: Kullanıcı adı henüz ayarlanmadı.");
-//     } else if (!socket) {
-//         console.warn("Mesaj gönderilemedi: Sunucu bağlantısı yok.");
-//     }
-// }
-
-// const appendMessage = (username, text, isMine) => {
-//     if (!messagesDiv) {
-//         console.error("appendMessage: messagesDiv bulunamadı!");
-//         return;
-//     }
-//     const messageElement = document.createElement('div');
-//     messageElement.classList.add('message');
-//     if (isMine) {
-//         messageElement.classList.add('my-message');
-//     }
-
-//     const usernameElement = document.createElement('strong');
-//     usernameElement.textContent = username + ': ';
-//     
-//     const textNode = document.createTextNode(text);
-
-//     messageElement.appendChild(usernameElement);
-//     messageElement.appendChild(textNode);
-//     
-//     messagesDiv.appendChild(messageElement);
-//     messagesDiv.scrollTop = messagesDiv.scrollHeight; 
-// }
-
-// --- Olay Dinleyicileri (Mesajlaşma için) ---
-// if (sendMessageButton && messageInput) {
-//     sendMessageButton.addEventListener('click', sendMessage);
-
-//     messageInput.addEventListener('keypress', (event) => {
-//         if (event.key === 'Enter') {
-//             sendMessage();
-//         }
-//     });
-// } else {
-//     console.warn("Mesajlaşma butonları veya giriş alanı DOM'da bulunamadı.");
-// }
 
 // --- Sohbet işlemleri ---
 const chatForm = document.getElementById('chat-form');
