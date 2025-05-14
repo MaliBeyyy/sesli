@@ -570,10 +570,7 @@ chatForm.addEventListener('submit', (e) => {
         
         // Kendi mesajımızı hemen göster
         const messageElement = document.createElement('div');
-        messageElement.style.margin = '5px';
-        messageElement.style.padding = '8px';
-        messageElement.style.backgroundColor = '#e3f2fd';
-        messageElement.style.borderRadius = '5px';
+        messageElement.classList.add('message', 'my-message');
         messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${chatInput.value}`;
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
@@ -594,19 +591,13 @@ function setupChatListeners() {
         if (msg.sender === myUsername && msg.type !== 'system') return;
         
         const messageElement = document.createElement('div');
-        messageElement.style.margin = '5px';
-        messageElement.style.padding = '8px';
+        messageElement.classList.add('message');
         
         // Sistem mesajları için farklı stil
         if (msg.type === 'system') {
-            messageElement.style.backgroundColor = '#f8d7da';
-            messageElement.style.color = '#721c24';
-            messageElement.style.textAlign = 'center';
-            messageElement.style.fontStyle = 'italic';
+            messageElement.classList.add('system-message');
             messageElement.innerHTML = `${msg.sender} ${msg.text}`;
         } else {
-            messageElement.style.backgroundColor = '#f5f5f5';
-            messageElement.style.borderRadius = '5px';
             messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
         }
         
