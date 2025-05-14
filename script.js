@@ -565,6 +565,8 @@ function createRoom() {
     appArea.classList.remove('hidden');
 
     displayUsername.textContent = myUsername || 'Oluşturan'; // optional
+    document.getElementById('roomCodeDisplay').textContent = currentRoom;
+    document.getElementById('leaveRoomButton').classList.remove('hidden');
     connectToSignalingServer(roomCode);
     alert(`Oda oluşturuldu: ${roomCode}. Diğer kullanıcıların bu kodla katılmasını bekleyin.`);
 }
@@ -579,6 +581,8 @@ function joinRoom() {
         appArea.classList.remove('hidden');
 
         displayUsername.textContent = myUsername || 'Katılan'; // optional
+        document.getElementById('roomCodeDisplay').textContent = currentRoom;
+        document.getElementById('leaveRoomButton').classList.remove('hidden');
         connectToSignalingServer(roomCode);
     } else {
         alert('Geçerli bir 6 haneli oda kodu girin.');
