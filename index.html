@@ -247,7 +247,14 @@
         </form>
     </div>
 
-    <script src="https://diskurt-oy50.onrender.com/socket.io/socket.io.js"></script>
+    <script>
+        // Socket.IO kaynağını dinamik olarak ayarla
+        const socketScript = document.createElement('script');
+        socketScript.src = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://localhost:3000/socket.io/socket.io.js'
+            : 'https://diskurt-oy50.onrender.com/socket.io/socket.io.js';
+        document.head.appendChild(socketScript);
+    </script>
     <script src="script.js"></script>
 </body>
 </html>
