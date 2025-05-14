@@ -3,6 +3,8 @@ const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
 
+let currentRoomId = '';
+
 const app = express();
 
 // CORS middleware
