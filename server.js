@@ -5,21 +5,29 @@ const path = require('path');
 
 const app = express();
 
+// CORS middleware
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
 // Statik dosyaları sunmak için (index.html ve script.js)
 // Bu dosyaların projenizin kök dizininde olduğunu varsayıyoruz.
 app.use(express.static(path.join(__dirname, '/'))); 
 
 const server = http.createServer(app);
 
-// CORS ayarını Render'daki canlı URL'nizi de içerecek şekilde güncelleyebilirsiniz.
-// İlk dağıtımdan sonra canlı URL'nizi buraya eklersiniz.
-// Şimdilik "*" veya geliştirme URL'leriniz kalabilir.
+// Socket.IO yapılandırması
 const io = socketIO(server, {
-  cors: {
-    // origin: ["http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500", "ONRENDER_APP_URL_BURAYA_GELECEK"],
-    origin: "*", // Başlangıç için "*" kullanabilirsiniz, daha sonra kısıtlayın.
-    methods: ["GET", "POST"]
-  }
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        allowedHeaders: ["*"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling']
 });
 
 const MAX_PEERS_IN_ROOM = 3;

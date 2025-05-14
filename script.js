@@ -13,7 +13,9 @@ let localStream;
 const peerConnections = {}; // { peerId: RTCPeerConnection }
 const remoteAudioElements = {}; // { peerId: {div: HTMLDivElement, audio: HTMLAudioElement} } - Artık div'i de saklıyoruz
 let socket;
-const signalingServerUrl = 'https://diskurt-oy50.onrender.com';
+const signalingServerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? `http://${window.location.hostname}:3000` 
+    : 'https://diskurt-oy50.onrender.com';
 let myUsername = ''; // Kullanıcı adını saklamak için
 
 // STUN sunucu yapılandırması (NAT traversal için)
@@ -27,6 +29,8 @@ const STUN_SERVERS = {
 let idsThatNeedMyOffer = new Set(); // Odadaki mevcut kişilere offer göndermemiz gerekebilir
 let idsThatNeedMyAnswer = new Set(); // Bize offer gönderen ama henüz cevaplayamadıklarımız
 
+console.log('Bağlanılacak sunucu:', signalingServerUrl);
+
 // --- Socket.IO Bağlantısı ve Olayları ---
 function connectToSignalingServer() {
     if (socket) {
@@ -35,12 +39,20 @@ function connectToSignalingServer() {
     socket = io(signalingServerUrl, {
         query: { 
             username: myUsername
-        }
+        },
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
     });
 
     socket.on('connect', () => {
         console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
-        setupChatListeners(); // Chat listener'larını ekle
+        setupChatListeners();
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('Bağlantı hatası:', error);
+        alert('Sunucuya bağlanırken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
     });
 
     socket.on('existing-peers', (peersData) => {
