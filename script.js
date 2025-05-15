@@ -1,8 +1,10 @@
 const joinArea = document.getElementById('joinArea');
 const usernameInput = document.getElementById('usernameInput');
+const roomInput = document.getElementById('roomInput');
 const joinButton = document.getElementById('joinButton');
 const appArea = document.getElementById('appArea');
 const displayUsername = document.getElementById('displayUsername');
+const displayRoom = document.getElementById('displayRoom');
 
 const startButton = document.getElementById('startButton');
 const muteButton = document.getElementById('muteButton');
@@ -20,7 +22,8 @@ let socket;
 const signalingServerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
     ? `http://${window.location.hostname}:3000` 
     : 'https://diskurt-oy50.onrender.com';
-let myUsername = ''; // Kullanıcı adını saklamak için
+let myUsername = '';
+let myRoom = ''; // Oda adını saklamak için
 
 // STUN sunucu yapılandırması (NAT traversal için)
 const STUN_SERVERS = {
@@ -79,27 +82,55 @@ themeToggle.addEventListener('click', toggleTheme);
 initializeTheme();
 
 // --- Socket.IO Bağlantısı ve Olayları ---
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 2000; // 2 saniye
+
 function connectToSignalingServer() {
     if (socket) {
-        return;
+        console.log('Mevcut socket bağlantısı kapatılıyor...');
+        socket.close();
+        socket = null;
     }
+
+    console.log(`Sunucuya bağlanılıyor... (Deneme: ${reconnectAttempts + 1})`);
+    console.log('Bağlantı parametreleri:', { username: myUsername, room: myRoom });
+    
     socket = io(signalingServerUrl, {
         query: { 
-            username: myUsername
+            username: myUsername,
+            room: myRoom
         },
         transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+        reconnectionDelay: RECONNECT_DELAY,
+        timeout: 10000
     });
 
     socket.on('connect', () => {
         console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
-        setupChatListeners();
+        reconnectAttempts = 0; // Bağlantı başarılı olduğunda sayacı sıfırla
+        setupSocketListeners();
     });
 
     socket.on('connect_error', (error) => {
         console.error('Bağlantı hatası:', error);
-        alert('Sunucuya bağlanırken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
+        handleConnectionError();
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Sinyalleşme sunucusuyla bağlantı kesildi. Sebep:', reason);
+        handleDisconnect(reason);
+    });
+
+    socket.on('error', (error) => {
+        console.error('Socket hatası:', error);
+        handleConnectionError();
+    });
+
+    socket.on('try-reconnect', () => {
+        console.log('Sunucudan yeniden bağlanma isteği alındı');
+        handleReconnect();
     });
 
     socket.on('existing-peers', (peersData) => {
@@ -225,16 +256,36 @@ function connectToSignalingServer() {
         console.log(`Kullanıcı ayrıldı: ${username}`);
         cleanupPeerConnection(peerId);
     });
+}
 
-    socket.on('disconnect', () => {
-        console.log('Sinyalleşme sunucusuyla bağlantı kesildi.');
-        // Tüm bağlantıları temizleyebiliriz veya yeniden bağlanmayı deneyebiliriz.
-        // Şimdilik basit tutalım, kullanıcı sayfayı yenileyebilir.
-        Object.keys(peerConnections).forEach(cleanupPeerConnection);
-        startButton.textContent = 'Sesi Başlat';
-        startButton.disabled = true; // Yeniden bağlanana kadar
-        alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
-    });
+function handleConnectionError() {
+    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        console.log(`Yeniden bağlanılıyor... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        setTimeout(() => {
+            connectToSignalingServer();
+        }, RECONNECT_DELAY * reconnectAttempts); // Her denemede bekleme süresini artır
+    } else {
+        console.error('Maksimum yeniden bağlanma denemesi aşıldı');
+        alert('Sunucuya bağlanılamıyor. Lütfen sayfayı yenileyip tekrar deneyin.');
+        startButton.disabled = true;
+    }
+}
+
+function handleDisconnect(reason) {
+    // Planlı kapatma durumlarında yeniden bağlanma deneme
+    if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+        console.log('Planlı bağlantı kesintisi, yeniden bağlanma denenmeyecek');
+        return;
+    }
+
+    // Diğer durumlarda yeniden bağlanmayı dene
+    handleConnectionError();
+}
+
+function handleReconnect() {
+    reconnectAttempts = 0; // Sayacı sıfırla
+    connectToSignalingServer();
 }
 
 // --- WebRTC Fonksiyonları ---
@@ -470,23 +521,20 @@ startButton.addEventListener('click', startAudio);
 muteButton.addEventListener('click', toggleMute); // Yeni olay dinleyici
 
 // --- Başlangıç ve Kullanıcı Adı Yönetimi ---
-joinButton.addEventListener('click', async () => {
+joinButton.addEventListener('click', () => {
     const username = usernameInput.value.trim();
-    if (username) {
+    const room = roomInput.value.trim();
+    if (username && room) {
+        myUsername = username;
+        myRoom = room;
+        displayUsername.textContent = myUsername;
+        displayRoom.textContent = myRoom;
         joinArea.classList.add('hidden');
         appArea.classList.remove('hidden');
-        displayUsername.textContent = username;
-        myUsername = username;
-
-        const hasPermission = await getInitialMediaPermission();
-        if (hasPermission) {
-            startButton.disabled = false;
-            screenShareButton.classList.remove('hidden');
-        }
-
-        connectToSignalingServer();
+        
+        initializeApp();
     } else {
-        alert('Lütfen bir kullanıcı adı girin!');
+        alert("Lütfen kullanıcı adı ve oda adı girin.");
     }
 });
 
@@ -589,7 +637,7 @@ chatForm.addEventListener('submit', (e) => {
 });
 
 // Socket.IO mesaj olaylarını dinle
-function setupChatListeners() {
+function setupSocketListeners() {
     if (!socket) return;
     
     socket.on('chat message', (msg) => {
