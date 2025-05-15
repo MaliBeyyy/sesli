@@ -1,8 +1,10 @@
 const joinArea = document.getElementById('joinArea');
 const usernameInput = document.getElementById('usernameInput');
+const roomInput = document.getElementById('roomInput');
 const joinButton = document.getElementById('joinButton');
 const appArea = document.getElementById('appArea');
 const displayUsername = document.getElementById('displayUsername');
+const displayRoom = document.getElementById('displayRoom');
 
 const startButton = document.getElementById('startButton');
 const muteButton = document.getElementById('muteButton');
@@ -16,7 +18,8 @@ let socket;
 const signalingServerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
     ? `http://${window.location.hostname}:3000` 
     : 'https://diskurt-oy50.onrender.com';
-let myUsername = ''; // Kullanıcı adını saklamak için
+let myUsername = '';
+let myRoom = ''; // Oda adını saklamak için
 
 // STUN sunucu yapılandırması (NAT traversal için)
 const STUN_SERVERS = {
@@ -68,52 +71,108 @@ window.addEventListener('load', () => {
 });
 
 // --- Socket.IO Bağlantısı ve Olayları ---
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 2000; // 2 saniye
+
 function connectToSignalingServer() {
     if (socket) {
-        return;
+        console.log('Mevcut socket bağlantısı kapatılıyor...');
+        socket.close();
+        socket = null;
     }
+
+    console.log(`Sunucuya bağlanılıyor... (Deneme: ${reconnectAttempts + 1})`);
+    console.log('Bağlantı parametreleri:', { username: myUsername, roomId: myRoom });
+    
     socket = io(signalingServerUrl, {
         query: { 
-            username: myUsername
+            username: myUsername,
+            room: myRoom
         },
         transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+        reconnectionDelay: RECONNECT_DELAY,
+        timeout: 10000
     });
 
     socket.on('connect', () => {
         console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
-        setupChatListeners();
+        reconnectAttempts = 0; // Bağlantı başarılı olduğunda sayacı sıfırla
+        setupSocketListeners();
     });
 
     socket.on('connect_error', (error) => {
         console.error('Bağlantı hatası:', error);
-        alert('Sunucuya bağlanırken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
+        handleConnectionError();
     });
 
+    socket.on('disconnect', (reason) => {
+        console.log('Sinyalleşme sunucusuyla bağlantı kesildi. Sebep:', reason);
+        handleDisconnect(reason);
+    });
+
+    socket.on('error', (error) => {
+        console.error('Socket hatası:', error);
+        handleConnectionError();
+    });
+
+    socket.on('try-reconnect', () => {
+        console.log('Sunucudan yeniden bağlanma isteği alındı');
+        handleReconnect();
+    });
+}
+
+function handleConnectionError() {
+    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        console.log(`Yeniden bağlanılıyor... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        setTimeout(() => {
+            connectToSignalingServer();
+        }, RECONNECT_DELAY * reconnectAttempts); // Her denemede bekleme süresini artır
+    } else {
+        console.error('Maksimum yeniden bağlanma denemesi aşıldı');
+        alert('Sunucuya bağlanılamıyor. Lütfen sayfayı yenileyip tekrar deneyin.');
+        startButton.disabled = true;
+    }
+}
+
+function handleDisconnect(reason) {
+    // Planlı kapatma durumlarında yeniden bağlanma deneme
+    if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+        console.log('Planlı bağlantı kesintisi, yeniden bağlanma denenmeyecek');
+        return;
+    }
+
+    // Diğer durumlarda yeniden bağlanmayı dene
+    handleConnectionError();
+}
+
+function handleReconnect() {
+    reconnectAttempts = 0; // Sayacı sıfırla
+    connectToSignalingServer();
+}
+
+function setupSocketListeners() {
+    if (!socket) return;
+
     socket.on('existing-peers', (peersData) => {
-        console.log('--- existing-peers ALINDI ---');
-        console.log('Alınan peersData:', JSON.stringify(peersData, null, 2)); // Detaylı log
+        console.log('Mevcut kullanıcılar alındı:', peersData);
         if (!Array.isArray(peersData)) {
             console.error("HATA: existing-peers'ten gelen veri bir dizi değil!", peersData);
             return;
         }
         peersData.forEach(peer => {
-            console.log('İşlenen peer objesi:', JSON.stringify(peer, null, 2)); // Her bir peer'ı logla
             if (!peer || typeof peer.id === 'undefined' || typeof peer.username === 'undefined') {
-                console.error("HATA: peer objesi beklenen formatta değil veya id/username eksik:", peer);
-                return; // Hatalı peer'ı atla
+                console.error("HATA: peer objesi beklenen formatta değil:", peer);
+                return;
             }
             if (peer.id === socket.id) return;
 
             if (!peerConnections[peer.id]) {
-                console.log(`createPeerConnection çağrılacak: peer.id=${peer.id}, peer.username=${peer.username}`);
                 const pc = createPeerConnection(peer.id, peer.username);
                 peerConnections[peer.id] = pc;
-            } else {
-                console.log(`${peer.id} için PeerConnection zaten var.`);
             }
-            console.log(`${peer.id} idsThatNeedMyOffer'a ekleniyor.`);
             idsThatNeedMyOffer.add(peer.id);
         });
         if (localStream && localStream.active) {
@@ -215,14 +274,30 @@ function connectToSignalingServer() {
         cleanupPeerConnection(peerId);
     });
 
-    socket.on('disconnect', () => {
-        console.log('Sinyalleşme sunucusuyla bağlantı kesildi.');
-        // Tüm bağlantıları temizleyebiliriz veya yeniden bağlanmayı deneyebiliriz.
-        // Şimdilik basit tutalım, kullanıcı sayfayı yenileyebilir.
-        Object.keys(peerConnections).forEach(cleanupPeerConnection);
-        startButton.textContent = 'Sesi Başlat';
-        startButton.disabled = true; // Yeniden bağlanana kadar
-        alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
+    socket.on('chat message', (msg) => {
+        console.log('Mesaj alındı:', msg);
+        // Kendi mesajlarımızı tekrar gösterme (zaten gösterildi)
+        if (msg.sender === myUsername && msg.type !== 'system') return;
+        
+        const messageElement = document.createElement('div');
+        messageElement.style.margin = '5px';
+        messageElement.style.padding = '8px';
+        
+        // Sistem mesajları için farklı stil
+        if (msg.type === 'system') {
+            messageElement.style.backgroundColor = '#f8d7da';
+            messageElement.style.color = '#721c24';
+            messageElement.style.textAlign = 'center';
+            messageElement.style.fontStyle = 'italic';
+            messageElement.innerHTML = `${msg.sender} ${msg.text}`;
+        } else {
+            messageElement.style.backgroundColor = '#f5f5f5';
+            messageElement.style.borderRadius = '5px';
+            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
+        }
+        
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
     });
 }
 
@@ -473,15 +548,18 @@ muteButton.addEventListener('click', toggleMute); // Yeni olay dinleyici
 // --- Başlangıç ve Kullanıcı Adı Yönetimi ---
 joinButton.addEventListener('click', () => {
     const username = usernameInput.value.trim();
-    if (username) {
+    const room = roomInput.value.trim();
+    if (username && room) {
         myUsername = username;
-        displayUsername.textContent = myUsername; // Kullanıcı adını göster
-        joinArea.classList.add('hidden'); // Katılma alanını gizle
-        appArea.classList.remove('hidden'); // Ana uygulama alanını göster
+        myRoom = room;
+        displayUsername.textContent = myUsername;
+        displayRoom.textContent = myRoom;
+        joinArea.classList.add('hidden');
+        appArea.classList.remove('hidden');
         
-        initializeApp(); // Medya izinlerini al ve sunucuya bağlan
+        initializeApp();
     } else {
-        alert("Lütfen bir kullanıcı adı girin.");
+        alert("Lütfen kullanıcı adı ve oda adı girin.");
     }
 });
 
@@ -497,7 +575,6 @@ async function initializeApp() {
         appArea.classList.add('hidden');
     }
 }
-
 
 // --- Sohbet işlemleri ---
 const chatForm = document.getElementById('chat-form');
@@ -551,36 +628,5 @@ chatForm.addEventListener('submit', (e) => {
         console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj boş');
     }
 });
-
-// Socket.IO mesaj olaylarını dinle
-function setupChatListeners() {
-    if (!socket) return;
-    
-    socket.on('chat message', (msg) => {
-        console.log('Mesaj alındı:', msg);
-        // Kendi mesajlarımızı tekrar gösterme (zaten gösterildi)
-        if (msg.sender === myUsername && msg.type !== 'system') return;
-        
-        const messageElement = document.createElement('div');
-        messageElement.style.margin = '5px';
-        messageElement.style.padding = '8px';
-        
-        // Sistem mesajları için farklı stil
-        if (msg.type === 'system') {
-            messageElement.style.backgroundColor = '#f8d7da';
-            messageElement.style.color = '#721c24';
-            messageElement.style.textAlign = 'center';
-            messageElement.style.fontStyle = 'italic';
-            messageElement.innerHTML = `${msg.sender} ${msg.text}`;
-        } else {
-            messageElement.style.backgroundColor = '#f5f5f5';
-            messageElement.style.borderRadius = '5px';
-            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
-        }
-        
-        messages.appendChild(messageElement);
-        messages.scrollTop = messages.scrollHeight;
-    });
-}
 
 console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
