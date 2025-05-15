@@ -601,6 +601,90 @@
             }
         }
 
+        .accent-button {
+            background-color: #6c5ce7 !important;
+            color: white !important;
+        }
+
+        .accent-button:hover {
+            background-color: #5849c2 !important;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+
+        .modal-content {
+            background-color: var(--container-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+            color: var(--text-color);
+        }
+
+        .modal-content p {
+            color: var(--text-color);
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            background-color: var(--input-bg);
+            color: var(--text-color);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .modal-buttons button:first-child {
+            background-color: var(--button-bg);
+            color: white;
+        }
+
+        .modal-buttons button:last-child {
+            background-color: var(--message-bg);
+            color: var(--text-color);
+        }
+
+        .modal-buttons button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
     </style>
 </head>
 <body>
@@ -629,6 +713,19 @@
             <button id="muteButton" class="hidden">Sustur</button>
             <button id="screenShareButton" class="hidden">Ekranı Paylaş</button>
             <button id="stopScreenShareButton" class="hidden">Ekran Paylaşımını Durdur</button>
+            <button id="changeRoomButton" class="accent-button">Oda Değiştir</button>
+        </div>
+
+        <div id="roomChangeModal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Oda Değiştir</h2>
+                <p>Yeni oda adını girin:</p>
+                <input type="text" id="newRoomInput" placeholder="Yeni oda adı">
+                <div class="modal-buttons">
+                    <button id="confirmRoomChange">Odaya Geç</button>
+                    <button id="cancelRoomChange">İptal</button>
+                </div>
+            </div>
         </div>
 
         <h2>Ses Akışları</h2>
