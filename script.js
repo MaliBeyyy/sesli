@@ -11,6 +11,7 @@ const cameraButton = document.getElementById('cameraButton');
 const stopCameraButton = document.getElementById('stopCameraButton');
 const screenShareButton = document.getElementById('screenShareButton');
 const stopScreenShareButton = document.getElementById('stopScreenShareButton');
+const leaveRoomButton = document.getElementById('leaveRoomButton');
 const localAudio = document.getElementById('localAudio');
 const remoteAudioContainer = document.getElementById('remoteAudioContainer');
 
@@ -827,3 +828,58 @@ function stopCamera() {
 // Event listener'ları ekle
 cameraButton.addEventListener('click', startCamera);
 stopCameraButton.addEventListener('click', stopCamera);
+
+// Odadan çıkma fonksiyonu
+function leaveRoom() {
+    if (confirm('Odadan çıkmak istediğinize emin misiniz?')) {
+        // Tüm medya akışlarını durdur
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+
+        // Tüm peer bağlantılarını temizle
+        Object.keys(peerConnections).forEach(cleanupPeerConnection);
+
+        // Socket bağlantısını kapat
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+
+        // UI'ı sıfırla
+        appArea.classList.add('hidden');
+        joinArea.classList.remove('hidden');
+        startButton.textContent = 'Sesi Başlat';
+        startButton.disabled = true;
+        muteButton.classList.add('hidden');
+        cameraButton.classList.add('hidden');
+        screenShareButton.classList.add('hidden');
+        stopScreenShareButton.classList.add('hidden');
+        stopCameraButton.classList.add('hidden');
+        
+        // Input alanlarını temizle
+        usernameInput.value = '';
+        roomInput.value = '';
+        
+        // Sohbet alanını temizle
+        while (messages.firstChild) {
+            messages.removeChild(messages.firstChild);
+        }
+
+        // Global değişkenleri sıfırla
+        myUsername = '';
+        myRoom = '';
+    }
+}
+
+// Odadan çıkma butonu için event listener
+leaveRoomButton.addEventListener('click', leaveRoom);
