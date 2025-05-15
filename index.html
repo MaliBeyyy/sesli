@@ -119,6 +119,22 @@
             display: none;
         }
 
+        #cameraButton {
+            background-color: #17a2b8 !important;
+        }
+
+        #cameraButton:hover {
+            background-color: #138496 !important;
+        }
+
+        #stopCameraButton {
+            background-color: #dc3545 !important;
+        }
+
+        #stopCameraButton:hover {
+            background-color: #c82333 !important;
+        }
+
         #screenShareButton {
             background-color: #28a745 !important;
         }
@@ -153,6 +169,8 @@
         .video-wrapper video {
             width: 100%;
             border-radius: 4px;
+            transform: scaleX(-1); /* Ayna efekti */
+            -webkit-transform: scaleX(-1); /* Safari için */
         }
 
         .video-wrapper p {
@@ -601,6 +619,12 @@
             }
         }
 
+        /* Ekran paylaşımı için ayna efektini devre dışı bırak */
+        .screen-share-video {
+            transform: scaleX(1) !important;
+            -webkit-transform: scaleX(1) !important;
+        }
+
     </style>
 </head>
 <body>
@@ -627,6 +651,8 @@
         <div id="controls">
             <button id="startButton" disabled>Sesi Başlat</button>
             <button id="muteButton" class="hidden">Sustur</button>
+            <button id="cameraButton" class="hidden">Kamerayı Aç</button>
+            <button id="stopCameraButton" class="hidden">Kamerayı Kapat</button>
             <button id="screenShareButton" class="hidden">Ekranı Paylaş</button>
             <button id="stopScreenShareButton" class="hidden">Ekran Paylaşımını Durdur</button>
         </div>

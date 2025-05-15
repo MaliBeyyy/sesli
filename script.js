@@ -7,6 +7,8 @@ const displayUsername = document.getElementById('displayUsername');
 
 const startButton = document.getElementById('startButton');
 const muteButton = document.getElementById('muteButton');
+const cameraButton = document.getElementById('cameraButton');
+const stopCameraButton = document.getElementById('stopCameraButton');
 const screenShareButton = document.getElementById('screenShareButton');
 const stopScreenShareButton = document.getElementById('stopScreenShareButton');
 const localAudio = document.getElementById('localAudio');
@@ -14,6 +16,7 @@ const remoteAudioContainer = document.getElementById('remoteAudioContainer');
 
 let localStream;
 let screenStream;
+let cameraStream;
 const peerConnections = {}; // { peerId: RTCPeerConnection }
 const remoteAudioElements = {}; // { peerId: {div: HTMLDivElement, audio: HTMLAudioElement} }
 const remoteVideoElements = {}; // { peerId: {div: HTMLDivElement, video: HTMLVideoElement} }
@@ -395,6 +398,7 @@ async function startAudio() {
         localAudio.srcObject = null;
         startButton.textContent = 'Sesi Başlat';
         muteButton.classList.add('hidden'); // Susturma butonunu gizle
+        cameraButton.classList.add('hidden'); // Kamera butonunu gizle
         muteButton.textContent = 'Sustur'; // Metni sıfırla
         localAudio.muted = true; // Kendi sesimizi duymamak için
         console.log('Yerel ses durduruldu (Stop Audio).');
@@ -412,6 +416,7 @@ async function startAudio() {
         localAudio.muted = true; // Başlangıçta kendi sesimizi duymamak için
         startButton.textContent = 'Sesi Durdur';
         muteButton.classList.remove('hidden'); // Susturma butonunu göster
+        cameraButton.classList.remove('hidden'); // Kamera butonunu göster
         muteButton.textContent = 'Sustur'; // Başlangıç durumu
 
         // Mevcut/yeni PeerConnection'lara track'leri ekle
@@ -679,18 +684,22 @@ screenShareButton.addEventListener('click', startScreenShare);
 stopScreenShareButton.addEventListener('click', stopScreenShare);
 
 // Uzak video elementini oluşturma fonksiyonu
-function createRemoteVideo(peerId, peerUsername) {
+function createRemoteVideo(peerId, peerUsername, isScreenShare = false) {
     const videoWrapper = document.createElement('div');
     videoWrapper.id = `remoteVideoDiv-${peerId}`;
     videoWrapper.style.marginBottom = '10px';
 
     const label = document.createElement('p');
-    label.textContent = `${peerUsername} Ekran Paylaşımı`;
+    label.textContent = isScreenShare ? `${peerUsername} Ekran Paylaşımı` : `${peerUsername} Kamerası`;
 
     const video = document.createElement('video');
     video.autoplay = true;
     video.playsInline = true;
     video.style.maxWidth = '100%';
+    
+    if (isScreenShare) {
+        video.classList.add('screen-share-video');
+    }
     
     videoWrapper.appendChild(label);
     videoWrapper.appendChild(video);
@@ -729,10 +738,92 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
         } else if (event.track.kind === 'video') {
             let videoWrapper = remoteVideoElements[peerId];
             if (!videoWrapper) {
-                videoWrapper = createRemoteVideo(peerId, peerUsername);
+                // Ekran paylaşımı mı yoksa kamera mı olduğunu kontrol et
+                const isScreenShare = event.track.label.toLowerCase().includes('screen') || 
+                                    event.track.label.toLowerCase().includes('display');
+                videoWrapper = createRemoteVideo(peerId, peerUsername, isScreenShare);
                 remoteVideoElements[peerId] = videoWrapper;
             }
             videoWrapper.video.srcObject = event.streams[0];
         }
     };
 }
+
+// Kamera işlevselliği için yeni fonksiyonlar
+async function startCamera() {
+    try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+            video: true,
+            audio: false 
+        });
+        
+        cameraButton.classList.add('hidden');
+        stopCameraButton.classList.remove('hidden');
+
+        // Kamera akışını tüm bağlantılara ekle
+        Object.keys(peerConnections).forEach(async (peerId) => {
+            const pc = peerConnections[peerId];
+            if (pc && pc.signalingState === 'stable') {
+                cameraStream.getTracks().forEach(track => {
+                    pc.addTrack(track, cameraStream);
+                });
+                await initiateOffer(peerId);
+            }
+        });
+
+        // Yerel kamera görüntüsünü göster
+        const localVideo = document.createElement('video');
+        localVideo.id = 'localVideo';
+        localVideo.autoplay = true;
+        localVideo.playsInline = true;
+        localVideo.muted = true;
+        localVideo.srcObject = cameraStream;
+        
+        const localVideoWrapper = document.createElement('div');
+        localVideoWrapper.id = 'localVideoWrapper';
+        localVideoWrapper.className = 'video-wrapper';
+        
+        const label = document.createElement('p');
+        label.textContent = 'Senin Kameran';
+        
+        localVideoWrapper.appendChild(label);
+        localVideoWrapper.appendChild(localVideo);
+        remoteVideoContainer.insertBefore(localVideoWrapper, remoteVideoContainer.firstChild);
+
+    } catch (error) {
+        console.error('Kamera başlatılırken hata:', error);
+        alert('Kamera başlatılamadı: ' + error.message);
+        stopCamera();
+    }
+}
+
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => {
+            track.stop();
+            // Tüm peer bağlantılarından kamera track'lerini kaldır
+            Object.values(peerConnections).forEach(pc => {
+                const senders = pc.getSenders();
+                senders.forEach(sender => {
+                    if (sender.track && sender.track.kind === 'video') {
+                        pc.removeTrack(sender);
+                    }
+                });
+            });
+        });
+        cameraStream = null;
+    }
+
+    // Yerel video elementini kaldır
+    const localVideoWrapper = document.getElementById('localVideoWrapper');
+    if (localVideoWrapper) {
+        localVideoWrapper.remove();
+    }
+
+    cameraButton.classList.remove('hidden');
+    stopCameraButton.classList.add('hidden');
+}
+
+// Event listener'ları ekle
+cameraButton.addEventListener('click', startCamera);
+stopCameraButton.addEventListener('click', stopCamera);
