@@ -28,6 +28,8 @@ const signalingServerUrl = window.location.hostname === 'localhost' || window.lo
 let myUsername = '';
 let myRoom = ''; // Oda adını saklamak için
 
+let isHost = false; // Host durumunu takip etmek için
+
 // STUN sunucu yapılandırması (NAT traversal için)
 const STUN_SERVERS = {
   iceServers: [
@@ -241,6 +243,58 @@ function connectToSignalingServer() {
         startButton.textContent = 'Sesi Başlat';
         startButton.disabled = true; // Yeniden bağlanana kadar
         alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
+    });
+
+    socket.on('host-status', (data) => {
+        isHost = data.isHost;
+        if (isHost) {
+            console.log('Bu odanın hostu sensin!');
+            // Host olduğunu kullanıcıya bildir
+            const hostBadge = document.createElement('span');
+            hostBadge.textContent = ' (Host)';
+            hostBadge.style.color = '#28a745';
+            hostBadge.style.fontWeight = 'bold';
+            displayUsername.appendChild(hostBadge);
+        }
+    });
+
+    socket.on('new-host', (data) => {
+        isHost = socket.id === data.hostId;
+        // Eski host badge'ini temizle
+        const existingBadge = displayUsername.querySelector('span');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+        
+        if (isHost) {
+            console.log('Yeni host sensin!');
+            const hostBadge = document.createElement('span');
+            hostBadge.textContent = ' (Host)';
+            hostBadge.style.color = '#28a745';
+            hostBadge.style.fontWeight = 'bold';
+            displayUsername.appendChild(hostBadge);
+        }
+        
+        // Bilgilendirme mesajı
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', 'system-message');
+        messageElement.textContent = `${data.hostUsername} yeni host oldu.`;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+    });
+
+    socket.on('kicked-from-room', () => {
+        alert('Host tarafından odadan atıldınız!');
+        leaveRoom(); // Odadan çık
+    });
+
+    socket.on('user-kicked', (data) => {
+        // Bilgilendirme mesajı
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', 'system-message');
+        messageElement.textContent = `${data.kickedUsername} host tarafından odadan atıldı.`;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
     });
 }
 
@@ -720,26 +774,57 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
                 const peerDiv = document.createElement('div');
                 peerDiv.id = `remoteAudioDiv-${peerId}`;
                 peerDiv.style.marginBottom = '10px';
+                peerDiv.style.display = 'flex';
+                peerDiv.style.justifyContent = 'space-between';
+                peerDiv.style.alignItems = 'center';
+
+                const leftDiv = document.createElement('div');
+                leftDiv.style.flex = '1';
 
                 const label = document.createElement('p');
                 label.textContent = `${peerUsername} (${peerId.substring(0, 6)}...):`;
-
+                
                 const remoteAudio = document.createElement('audio');
                 remoteAudio.autoplay = true;
                 remoteAudio.controls = true;
                 
-                peerDiv.appendChild(label);
-                peerDiv.appendChild(remoteAudio);
-                remoteAudioContainer.appendChild(peerDiv);
+                leftDiv.appendChild(label);
+                leftDiv.appendChild(remoteAudio);
+                peerDiv.appendChild(leftDiv);
+
+                // Host ise atma butonu ekle
+                if (isHost && socket.id !== peerId) {
+                    const kickButton = document.createElement('button');
+                    kickButton.textContent = 'Odadan At';
+                    kickButton.style.backgroundColor = '#dc3545';
+                    kickButton.style.color = 'white';
+                    kickButton.style.border = 'none';
+                    kickButton.style.padding = '5px 10px';
+                    kickButton.style.borderRadius = '4px';
+                    kickButton.style.cursor = 'pointer';
+                    kickButton.style.marginLeft = '10px';
+                    
+                    kickButton.onclick = () => {
+                        if (confirm(`${peerUsername} kullanıcısını odadan atmak istediğinize emin misiniz?`)) {
+                            socket.emit('kick-user', peerId);
+                        }
+                    };
+                    
+                    peerDiv.appendChild(kickButton);
+                }
                 
-                remoteAudioElements[peerId] = { div: peerDiv, audio: remoteAudio, username: peerUsername };
+                remoteAudioContainer.appendChild(peerDiv);
+                remoteAudioElements[peerId] = { 
+                    div: peerDiv, 
+                    audio: remoteAudio, 
+                    username: peerUsername 
+                };
                 audioWrapper = remoteAudioElements[peerId];
             }
             audioWrapper.audio.srcObject = event.streams[0];
         } else if (event.track.kind === 'video') {
             let videoWrapper = remoteVideoElements[peerId];
             if (!videoWrapper) {
-                // Ekran paylaşımı mı yoksa kamera mı olduğunu kontrol et
                 const isScreenShare = event.track.label.toLowerCase().includes('screen') || 
                                     event.track.label.toLowerCase().includes('display');
                 videoWrapper = createRemoteVideo(peerId, peerUsername, isScreenShare);

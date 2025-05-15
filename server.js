@@ -30,19 +30,22 @@ const io = socketIO(server, {
     transports: ['websocket', 'polling']
 });
 
-// Her oda için ayrı kullanıcı listesi tutacağız
-const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } } } }
+// Her oda için ayrı kullanıcı listesi ve host bilgisi tutacağız
+const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } }, host: socketId } }
 
 io.on('connection', (socket) => {
     const clientQueryUsername = socket.handshake.query.username;
-    const roomId = socket.handshake.query.roomId; // Oda ID'sini al
+    const roomId = socket.handshake.query.roomId;
     let processedUsername = clientQueryUsername || 'AnonimKullanici';
     
     console.log(`[Sunucu] Yeni bağlantı: ID=${socket.id}, Oda=${roomId}, Username=${processedUsername}`);
 
-    // Oda yoksa oluştur
+    // Oda yoksa oluştur ve ilk katılanı host yap
     if (!rooms.has(roomId)) {
-        rooms.set(roomId, { peers: {} });
+        rooms.set(roomId, { 
+            peers: {}, 
+            host: socket.id // İlk katılan kişiyi host yap
+        });
     }
 
     const room = rooms.get(roomId);
@@ -50,7 +53,8 @@ io.on('connection', (socket) => {
     // Odadaki mevcut kullanıcıları yeni kullanıcıya bildir
     const existingPeersData = Object.entries(room.peers).map(([id, data]) => ({ 
         id, 
-        username: data.username 
+        username: data.username,
+        isHost: id === room.host // Host bilgisini ekle
     }));
     socket.emit('existing-peers', existingPeersData);
 
@@ -59,14 +63,38 @@ io.on('connection', (socket) => {
         if (peerData.socket && peerData.socket.id !== socket.id) {
             peerData.socket.emit('peer-joined', { 
                 newPeerId: socket.id, 
-                username: processedUsername 
+                username: processedUsername,
+                isHost: socket.id === room.host
             });
         }
     });
 
+    // Kullanıcıya host durumunu bildir
+    socket.emit('host-status', {
+        isHost: socket.id === room.host
+    });
+
     // Kullanıcıyı odaya ekle
     room.peers[socket.id] = { socket: socket, username: processedUsername };
-    socket.join(roomId); // Socket.IO room'una ekle
+    socket.join(roomId);
+
+    // Kullanıcı atma işlemi
+    socket.on('kick-user', (targetId) => {
+        if (socket.id === room.host) { // Sadece host kullanıcı atabilir
+            const targetSocket = room.peers[targetId]?.socket;
+            if (targetSocket) {
+                // Atılan kullanıcıya bildir
+                targetSocket.emit('kicked-from-room');
+                // Diğer kullanıcılara bildir
+                socket.to(roomId).emit('user-kicked', {
+                    kickedId: targetId,
+                    kickedUsername: room.peers[targetId].username
+                });
+                // Kullanıcıyı odadan çıkar
+                targetSocket.disconnect();
+            }
+        }
+    });
 
     socket.on('offer', (data) => {
         const targetPeerData = room.peers[data.targetId];
@@ -109,7 +137,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chat message', (msg) => {
-        // Mesajı sadece aynı odadaki kullanıcılara ilet
         io.to(roomId).emit('chat message', {
             text: msg.text,
             sender: msg.sender || 'Misafir',
@@ -125,6 +152,21 @@ io.on('connection', (socket) => {
             
             console.log(`[Sunucu] Kullanıcı ayrıldı: ${disconnectedUsername} (ID: ${socket.id}, Oda: ${roomId})`);
             
+            // Eğer ayrılan kişi host ise, yeni host seç
+            if (socket.id === room.host) {
+                // Odadaki diğer kullanıcılardan birini host yap
+                const remainingPeers = Object.keys(room.peers).filter(id => id !== socket.id);
+                if (remainingPeers.length > 0) {
+                    const newHost = remainingPeers[0]; // İlk katılan kişiyi host yap
+                    room.host = newHost;
+                    // Yeni host'a ve diğer kullanıcılara bildir
+                    io.to(roomId).emit('new-host', {
+                        hostId: newHost,
+                        hostUsername: room.peers[newHost].username
+                    });
+                }
+            }
+
             delete room.peers[socket.id];
             
             // Odadaki diğer kullanıcılara bildir
