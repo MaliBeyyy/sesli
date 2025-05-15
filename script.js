@@ -1,5 +1,6 @@
 const joinArea = document.getElementById('joinArea');
 const usernameInput = document.getElementById('usernameInput');
+const roomInput = document.getElementById('roomInput');
 const joinButton = document.getElementById('joinButton');
 const appArea = document.getElementById('appArea');
 const displayUsername = document.getElementById('displayUsername');
@@ -20,7 +21,8 @@ let socket;
 const signalingServerUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
     ? `http://${window.location.hostname}:3000` 
     : 'https://diskurt-oy50.onrender.com';
-let myUsername = ''; // Kullanıcı adını saklamak için
+let myUsername = '';
+let myRoom = ''; // Oda adını saklamak için
 
 // STUN sunucu yapılandırması (NAT traversal için)
 const STUN_SERVERS = {
@@ -85,7 +87,8 @@ function connectToSignalingServer() {
     }
     socket = io(signalingServerUrl, {
         query: { 
-            username: myUsername
+            username: myUsername,
+            roomId: myRoom // Oda ID'sini query parametresi olarak ekle
         },
         transports: ['websocket', 'polling'],
         reconnectionAttempts: 5,
@@ -472,11 +475,14 @@ muteButton.addEventListener('click', toggleMute); // Yeni olay dinleyici
 // --- Başlangıç ve Kullanıcı Adı Yönetimi ---
 joinButton.addEventListener('click', async () => {
     const username = usernameInput.value.trim();
-    if (username) {
+    const room = roomInput.value.trim();
+    
+    if (username && room) {
         joinArea.classList.add('hidden');
         appArea.classList.remove('hidden');
-        displayUsername.textContent = username;
+        displayUsername.textContent = `${username} (Oda: ${room})`;
         myUsername = username;
+        myRoom = room;
 
         const hasPermission = await getInitialMediaPermission();
         if (hasPermission) {
@@ -486,7 +492,7 @@ joinButton.addEventListener('click', async () => {
 
         connectToSignalingServer();
     } else {
-        alert('Lütfen bir kullanıcı adı girin!');
+        alert('Lütfen kullanıcı adı ve oda adı girin!');
     }
 });
 
