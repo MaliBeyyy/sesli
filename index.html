@@ -664,6 +664,27 @@
             }
         }
 
+        #messages .message a {
+            color: #007bff;
+            text-decoration: none;
+            word-break: break-all;
+            transition: color 0.2s;
+        }
+
+        #messages .message a:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+
+        /* Dark tema için link renkleri */
+        :root[data-theme="dark"] #messages .message a {
+            color: #66b0ff;
+        }
+
+        :root[data-theme="dark"] #messages .message a:hover {
+            color: #99ccff;
+        }
+
     </style>
 </head>
 <body>
