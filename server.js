@@ -28,27 +28,39 @@ const io = socketIO(server, {
         credentials: true
     },
     transports: ['websocket', 'polling'],
-    pingTimeout: 60000, // Ping zaman aşımını artır
-    pingInterval: 25000, // Ping aralığını artır
-    connectTimeout: 30000, // Bağlantı zaman aşımını artır
-    maxHttpBufferSize: 1e8, // Buffer boyutunu artır
-    allowEIO3: true, // Socket.IO v3 uyumluluğu
-    // Yeniden bağlanma ayarları
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 30000,
+    maxHttpBufferSize: 1e8,
+    allowEIO3: true,
+    // Render free tier için optimize edilmiş ayarlar
+    path: '/socket.io/',
+    serveClient: false,
+    cookie: false,
+    // Bellek kullanımını optimize et
+    perMessageDeflate: {
+        threshold: 2048, // 2KB'den büyük mesajları sıkıştır
+        zlibInflateOptions: {
+            chunkSize: 10 * 1024 // Chunk boyutunu küçült
+        }
+    }
 });
 
-// Bağlantı durumunu izle
-io.engine.on("connection_error", (err) => {
-    console.error("[Sunucu] Bağlantı hatası:", err.code, err.message);
-});
+// Sunucu durumunu izle
+let activeConnections = 0;
+setInterval(() => {
+    console.log(`Aktif bağlantı sayısı: ${activeConnections}`);
+    // Bellek kullanımını logla
+    const used = process.memoryUsage();
+    console.log(`Bellek Kullanımı: ${Math.round(used.heapUsed / 1024 / 1024 * 100) / 100} MB`);
+}, 30000);
 
 // Her oda için ayrı kullanıcı listesi tutacağız
 const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } } } }
 
 io.on('connection', (socket) => {
+    activeConnections++;
+    
     const clientQueryUsername = socket.handshake.query.username;
     const roomId = socket.handshake.query.roomId;
     let processedUsername = clientQueryUsername || 'AnonimKullanici';
@@ -200,7 +212,9 @@ io.on('connection', (socket) => {
         });
     });
 
+    // Bağlantı kopmadan önce temizlik yap
     socket.on('disconnect', () => {
+        activeConnections--;
         if (rooms.has(roomId)) {
             const room = rooms.get(roomId);
             const disconnectedUser = room.peers[socket.id];
@@ -238,6 +252,22 @@ io.on('connection', (socket) => {
                 console.log(`[Sunucu] Oda silindi: ${roomId} (boş)`);
             }
         }
+    });
+
+    // Ping/Pong mekanizması
+    let lastPing = Date.now();
+    const pingInterval = setInterval(() => {
+        if (Date.now() - lastPing > 45000) { // 45 saniye yanıt yoksa
+            console.log(`[Sunucu] ${socket.id} ping timeout`);
+            socket.disconnect(true);
+            clearInterval(pingInterval);
+        } else {
+            socket.emit('ping');
+        }
+    }, 20000);
+
+    socket.on('pong', () => {
+        lastPing = Date.now();
     });
 });
 

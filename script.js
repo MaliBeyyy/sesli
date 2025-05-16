@@ -86,6 +86,19 @@ themeToggle.addEventListener('click', toggleTheme);
 // Tema başlatma
 initializeTheme();
 
+// Sunucu durumunu kontrol et
+async function checkServerStatus() {
+    try {
+        const response = await fetch(signalingServerUrl + '/ping');
+        if (!response.ok) throw new Error('Sunucu yanıt vermiyor');
+        const text = await response.text();
+        return text === 'pong';
+    } catch (error) {
+        console.error('Sunucu durumu kontrol edilirken hata:', error);
+        return false;
+    }
+}
+
 // --- Socket.IO Bağlantısı ve Olayları ---
 function connectToSignalingServer() {
     if (socket) {
@@ -96,191 +109,228 @@ function connectToSignalingServer() {
         }
     }
 
-    try {
-        console.log('Sunucuya bağlanmaya çalışılıyor...');
-        socket = io(signalingServerUrl, {
-            query: { 
-                username: myUsername,
-                roomId: myRoom
-            },
-            transports: ['websocket', 'polling'],
-            reconnectionAttempts: 10,
-            reconnectionDelay: 2000,
-            timeout: 10000,
-            forceNew: true,
-            reconnection: true,
-            reconnectionDelayMax: 5000,
-            pingTimeout: 60000,
-            pingInterval: 25000
-        });
+    // Önce sunucu durumunu kontrol et
+    checkServerStatus().then(isServerActive => {
+        if (!isServerActive) {
+            alert('Sunucu şu anda aktif değil. Birkaç saniye sonra tekrar deneyin.');
+            setTimeout(connectToSignalingServer, 5000); // 5 saniye sonra tekrar dene
+            return;
+        }
 
-        // Tüm Socket.IO olay dinleyicilerini burada tanımlıyoruz
-        socket.on('connect', () => {
-            console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
-            setupChatListeners();
-            startButton.disabled = false;
-        });
+        try {
+            console.log('Sunucuya bağlanmaya çalışılıyor...');
+            socket = io(signalingServerUrl, {
+                query: { 
+                    username: myUsername,
+                    roomId: myRoom
+                },
+                transports: ['websocket', 'polling'],
+                reconnectionAttempts: 10,
+                reconnectionDelay: 2000,
+                timeout: 10000,
+                forceNew: true,
+                reconnection: true,
+                reconnectionDelayMax: 5000,
+                path: '/socket.io/',
+                // Bellek optimizasyonu
+                perMessageDeflate: true,
+                // Ping ayarları
+                pingTimeout: 45000,
+                pingInterval: 20000
+            });
 
-        socket.on('connect_error', (error) => {
-            console.error('Bağlantı hatası:', error);
-            handleConnectionError();
-        });
+            // Ping/Pong mekanizması
+            socket.on('ping', () => {
+                socket.emit('pong');
+            });
 
-        socket.on('connect_timeout', (timeout) => {
-            console.error('Bağlantı zaman aşımı:', timeout);
-            handleConnectionError();
-        });
+            // Tüm Socket.IO olay dinleyicilerini burada tanımlıyoruz
+            socket.on('connect', () => {
+                console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
+                setupChatListeners();
+                startButton.disabled = false;
+            });
 
-        socket.on('error', (error) => {
-            console.error('Soket hatası:', error);
-            handleConnectionError();
-        });
+            socket.on('connect_error', (error) => {
+                console.error('Bağlantı hatası:', error);
+                handleConnectionError();
+            });
 
-        socket.on('disconnect', (reason) => {
-            console.log('Sunucu bağlantısı kesildi. Sebep:', reason);
-            if (reason === 'io server disconnect') {
-                socket.connect();
-            }
-            startButton.disabled = true;
-            Object.keys(peerConnections).forEach(cleanupPeerConnection);
-            startButton.textContent = 'Sesi Başlat';
-            alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
-        });
+            socket.on('connect_timeout', (timeout) => {
+                console.error('Bağlantı zaman aşımı:', timeout);
+                handleConnectionError();
+            });
 
-        socket.on('reconnect', (attemptNumber) => {
-            console.log(`Sunucuya yeniden bağlanıldı (${attemptNumber}. deneme)`);
-            if (myRoom && myUsername) {
-                socket.emit('rejoin-room', { roomId: myRoom, username: myUsername });
-            }
-            startButton.disabled = false;
-        });
+            socket.on('error', (error) => {
+                console.error('Soket hatası:', error);
+                handleConnectionError();
+            });
 
-        socket.on('reconnect_attempt', () => {
-            console.log('Sunucuya yeniden bağlanmaya çalışılıyor...');
-        });
+            socket.on('disconnect', (reason) => {
+                console.log('Sunucu bağlantısı kesildi. Sebep:', reason);
+                if (reason === 'io server disconnect') {
+                    socket.connect();
+                }
+                startButton.disabled = true;
+                Object.keys(peerConnections).forEach(cleanupPeerConnection);
+                startButton.textContent = 'Sesi Başlat';
+                alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
+            });
 
-        socket.on('reconnect_error', (error) => {
-            console.error('Yeniden bağlanma hatası:', error);
-            handleConnectionError();
-        });
+            socket.on('reconnect', (attemptNumber) => {
+                console.log(`Sunucuya yeniden bağlanıldı (${attemptNumber}. deneme)`);
+                if (myRoom && myUsername) {
+                    socket.emit('rejoin-room', { roomId: myRoom, username: myUsername });
+                }
+                startButton.disabled = false;
+            });
 
-        socket.on('reconnect_failed', () => {
-            console.error('Yeniden bağlanma başarısız oldu');
-            alert('Sunucuya yeniden bağlanma başarısız oldu. Lütfen sayfayı yenileyip tekrar deneyin.');
-            startButton.disabled = true;
-        });
+            socket.on('reconnect_attempt', () => {
+                console.log('Sunucuya yeniden bağlanmaya çalışılıyor...');
+            });
 
-        socket.on('existing-peers', (peersData) => {
-            console.log('--- existing-peers ALINDI ---');
-            if (!Array.isArray(peersData)) {
-                console.error("HATA: existing-peers'ten gelen veri bir dizi değil!", peersData);
-                return;
-            }
-            peersData.forEach(peer => {
-                if (!peer || typeof peer.id === 'undefined' || typeof peer.username === 'undefined') {
-                    console.error("HATA: peer objesi beklenen formatta değil veya id/username eksik:", peer);
+            socket.on('reconnect_error', (error) => {
+                console.error('Yeniden bağlanma hatası:', error);
+                handleConnectionError();
+            });
+
+            socket.on('reconnect_failed', () => {
+                console.error('Yeniden bağlanma başarısız oldu');
+                alert('Sunucuya yeniden bağlanma başarısız oldu. Lütfen sayfayı yenileyip tekrar deneyin.');
+                startButton.disabled = true;
+            });
+
+            socket.on('existing-peers', (peersData) => {
+                console.log('--- existing-peers ALINDI ---');
+                if (!Array.isArray(peersData)) {
+                    console.error("HATA: existing-peers'ten gelen veri bir dizi değil!", peersData);
                     return;
                 }
-                if (peer.id === socket.id) return;
+                peersData.forEach(peer => {
+                    if (!peer || typeof peer.id === 'undefined' || typeof peer.username === 'undefined') {
+                        console.error("HATA: peer objesi beklenen formatta değil veya id/username eksik:", peer);
+                        return;
+                    }
+                    if (peer.id === socket.id) return;
 
-                if (!peerConnections[peer.id]) {
-                    const pc = createPeerConnection(peer.id, peer.username);
-                    peerConnections[peer.id] = pc;
-                }
-                idsThatNeedMyOffer.add(peer.id);
-            });
-            if (localStream && localStream.active) {
-                idsThatNeedMyOffer.forEach(peerId => initiateOffer(peerId));
-                idsThatNeedMyOffer.clear();
-            }
-        });
-
-        socket.on('peer-joined', (data) => {
-            const { newPeerId, username } = data;
-            if (newPeerId === socket.id) return;
-
-            let pc = peerConnections[newPeerId];
-            if (!pc) {
-                pc = createPeerConnection(newPeerId, username);
-                peerConnections[newPeerId] = pc;
-            }
-        });
-
-        socket.on('offer', async (data) => {
-            const { sdp, fromId, fromUsername } = data;
-            if (fromId === socket.id) return;
-
-            let pc = peerConnections[fromId];
-            if (!pc) {
-                pc = createPeerConnection(fromId, fromUsername || 'Bilinmeyen Kullanıcı');
-                peerConnections[fromId] = pc;
-            }
-
-            try {
-                await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                    if (!peerConnections[peer.id]) {
+                        const pc = createPeerConnection(peer.id, peer.username);
+                        peerConnections[peer.id] = pc;
+                    }
+                    idsThatNeedMyOffer.add(peer.id);
+                });
                 if (localStream && localStream.active) {
-                    await sendAnswer(fromId);
-                } else {
-                    idsThatNeedMyAnswer.add(fromId);
+                    idsThatNeedMyOffer.forEach(peerId => initiateOffer(peerId));
+                    idsThatNeedMyOffer.clear();
                 }
-            } catch (error) {
-                console.error(`Offer işlenirken hata:`, error);
-            }
-        });
+            });
 
-        socket.on('answer', async (data) => {
-            const { sdp, fromId } = data;
-            if (fromId === socket.id) return;
+            socket.on('peer-joined', (data) => {
+                const { newPeerId, username } = data;
+                if (newPeerId === socket.id) return;
 
-            const pc = peerConnections[fromId];
-            if (pc) {
+                let pc = peerConnections[newPeerId];
+                if (!pc) {
+                    pc = createPeerConnection(newPeerId, username);
+                    peerConnections[newPeerId] = pc;
+                }
+            });
+
+            socket.on('offer', async (data) => {
+                const { sdp, fromId, fromUsername } = data;
+                if (fromId === socket.id) return;
+
+                let pc = peerConnections[fromId];
+                if (!pc) {
+                    pc = createPeerConnection(fromId, fromUsername || 'Bilinmeyen Kullanıcı');
+                    peerConnections[fromId] = pc;
+                }
+
                 try {
                     await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                    if (localStream && localStream.active) {
+                        await sendAnswer(fromId);
+                    } else {
+                        idsThatNeedMyAnswer.add(fromId);
+                    }
                 } catch (error) {
-                    console.error(`Answer işlenirken hata:`, error);
+                    console.error(`Offer işlenirken hata:`, error);
                 }
-            }
-        });
+            });
 
-        socket.on('ice-candidate', async (data) => {
-            const { candidate, fromId } = data;
-            if (fromId === socket.id) return;
+            socket.on('answer', async (data) => {
+                const { sdp, fromId } = data;
+                if (fromId === socket.id) return;
 
-            const pc = peerConnections[fromId];
-            if (pc && candidate) {
-                try {
-                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-                } catch (error) {
-                    console.error(`ICE candidate eklenirken hata:`, error);
+                const pc = peerConnections[fromId];
+                if (pc) {
+                    try {
+                        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+                    } catch (error) {
+                        console.error(`Answer işlenirken hata:`, error);
+                    }
                 }
-            }
-        });
+            });
 
-        socket.on('peer-left', (peerId) => {
-            if (peerId === socket.id) return;
-            cleanupPeerConnection(peerId);
-        });
+            socket.on('ice-candidate', async (data) => {
+                const { candidate, fromId } = data;
+                if (fromId === socket.id) return;
 
-        socket.on('host-status', (data) => {
-            isHost = data.isHost;
-            if (isHost) {
-                const hostBadge = document.createElement('span');
-                hostBadge.textContent = ' (Host)';
-                hostBadge.style.color = '#28a745';
-                hostBadge.style.fontWeight = 'bold';
-                displayUsername.appendChild(hostBadge);
-            }
-        });
+                const pc = peerConnections[fromId];
+                if (pc && candidate) {
+                    try {
+                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    } catch (error) {
+                        console.error(`ICE candidate eklenirken hata:`, error);
+                    }
+                }
+            });
 
-        socket.on('kicked-from-room', () => {
-            alert('Host tarafından odadan atıldınız!');
-            leaveRoom();
-        });
+            socket.on('peer-left', (peerId) => {
+                if (peerId === socket.id) return;
+                cleanupPeerConnection(peerId);
+            });
 
-    } catch (error) {
-        console.error('Socket.IO başlatılırken hata:', error);
-        handleConnectionError();
-    }
+            socket.on('host-status', (data) => {
+                isHost = data.isHost;
+                if (isHost) {
+                    const hostBadge = document.createElement('span');
+                    hostBadge.textContent = ' (Host)';
+                    hostBadge.style.color = '#28a745';
+                    hostBadge.style.fontWeight = 'bold';
+                    displayUsername.appendChild(hostBadge);
+                }
+            });
+
+            socket.on('kicked-from-room', () => {
+                alert('Host tarafından odadan atıldınız!');
+                leaveRoom();
+            });
+
+            // Bağlantı durumu değişikliklerini izle
+            socket.io.on('reconnect_attempt', (attempt) => {
+                console.log(`Yeniden bağlanma denemesi ${attempt}`);
+                if (attempt > 5) {
+                    alert('Sunucuya bağlanmakta sorun yaşıyoruz. Sayfayı yenilemek isteyebilirsiniz.');
+                }
+            });
+
+            socket.io.on('reconnect_error', (error) => {
+                console.error('Yeniden bağlanma hatası:', error);
+                if (!navigator.onLine) {
+                    alert('İnternet bağlantınız kopmuş görünüyor. Lütfen bağlantınızı kontrol edin.');
+                }
+            });
+
+            socket.io.on('reconnect_failed', () => {
+                alert('Sunucuya yeniden bağlanılamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
+            });
+
+        } catch (error) {
+            console.error('Socket.IO başlatılırken hata:', error);
+            handleConnectionError();
+        }
+    });
 }
 
 // Bağlantı hatalarını yönetme
