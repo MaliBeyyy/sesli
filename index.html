@@ -158,9 +158,24 @@
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             width: 100%;
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
             padding: 10px;
+            justify-content: start; /* Varsayılan olarak sola yasla */
+        }
+
+        /* İki video olduğunda container stilini değiştir */
+        #remoteVideoContainer:has(> .video-wrapper:nth-child(2)),
+        #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) {
+            grid-template-columns: repeat(2, minmax(300px, 1fr));
+            justify-content: center; /* İki video olduğunda ortala */
+            max-width: 1200px; /* Maksimum genişlik */
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Tek video olduğunda video boyutunu sınırla */
+        .video-wrapper:only-child {
+            max-width: 600px; /* Tek video için maksimum genişlik */
+            width: 100%;
         }
 
         .video-wrapper {
@@ -643,6 +658,23 @@
             .dev-link, .feedback-button {
                 width: 100%;
                 justify-content: center;
+            }
+        }
+
+        /* Mobil cihazlar için düzenleme */
+        @media (max-width: 768px) {
+            #remoteVideoContainer, #cameraVideoContainer {
+                grid-template-columns: 1fr;
+                padding: 5px;
+            }
+
+            #remoteVideoContainer:has(> .video-wrapper:nth-child(2)),
+            #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) {
+                grid-template-columns: 1fr;
+            }
+
+            .video-wrapper:only-child {
+                max-width: 100%;
             }
         }
 
