@@ -48,6 +48,7 @@ const themeToggle = document.createElement('button');
 themeToggle.id = 'theme-toggle';
 themeToggle.innerHTML = '🌙'; // Başlangıç ikonu
 themeToggle.title = 'Temayı Değiştir';
+document.querySelector('.chat-header').appendChild(themeToggle);
 
 // Tema durumu
 let isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -83,13 +84,7 @@ function initializeTheme() {
 themeToggle.addEventListener('click', toggleTheme);
 
 // Tema başlatma
-document.addEventListener('DOMContentLoaded', () => {
-    const chatHeader = document.querySelector('.chat-header');
-    if (chatHeader) {
-        chatHeader.appendChild(themeToggle);
-        initializeTheme();
-    }
-});
+initializeTheme();
 
 // Sunucu durumunu kontrol et
 async function checkServerStatus() {
@@ -672,17 +667,7 @@ function highlightChatButton() {
 }
 
 // Toggle butonu için event listener
-document.addEventListener('DOMContentLoaded', () => {
-    if (chatToggle) {
-        chatToggle.addEventListener('click', toggleChat);
-    }
-    if (clearChatButton) {
-        clearChatButton.addEventListener('click', clearChat);
-    }
-    if (chatForm) {
-        chatForm.addEventListener('submit', handleChatSubmit);
-    }
-});
+chatToggle.addEventListener('click', toggleChat);
 
 // Sohbeti temizleme fonksiyonu
 function clearChat() {
@@ -701,6 +686,9 @@ function clearChat() {
     }
 }
 
+// Temizleme butonu için event listener
+clearChatButton.addEventListener('click', clearChat);
+
 // Link dönüştürme fonksiyonu
 function linkify(text) {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -709,8 +697,7 @@ function linkify(text) {
     });
 }
 
-// Chat form submit handler
-function handleChatSubmit(e) {
+chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (socket && chatInput.value.trim()) {
         console.log('Mesaj gönderiliyor:', chatInput.value);
@@ -732,7 +719,7 @@ function handleChatSubmit(e) {
     } else {
         console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj boş');
     }
-}
+});
 
 // Socket.IO mesaj olaylarını dinle
 function setupChatListeners() {
