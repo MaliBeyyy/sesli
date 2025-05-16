@@ -1000,26 +1000,34 @@ function stopCamera() {
             track.stop();
         });
 
-        // Peer bağlantılarından kamera track'lerini kaldır
-        Object.values(peerConnections).forEach(pc => {
+        // Peer bağlantılarından kamera track'lerini kaldır ve yeni offer gönder
+        Object.entries(peerConnections).forEach(async ([peerId, pc]) => {
             if (pc && pc.signalingState !== 'closed') {
                 const senders = pc.getSenders();
-                senders.forEach(sender => {
-                    if (sender.track && sender.track.kind === 'video' && !sender.track.label.toLowerCase().includes('screen')) {
-                        try {
-                            pc.removeTrack(sender);
-                            console.log('Kamera track\'i peer bağlantısından kaldırıldı');
-                        } catch (error) {
-                            console.error('Track kaldırılırken hata:', error);
-                        }
-                    }
-                });
+                const videoSenders = senders.filter(sender => 
+                    sender.track && 
+                    sender.track.kind === 'video' && 
+                    !sender.track.label.toLowerCase().includes('screen')
+                );
 
-                // Her peer için yeni bir offer gönder
-                try {
-                    initiateOffer(pc.peerId);
-                } catch (error) {
-                    console.error('Offer gönderilirken hata:', error);
+                // Video track'lerini kaldır
+                for (const sender of videoSenders) {
+                    try {
+                        pc.removeTrack(sender);
+                        console.log('Kamera track\'i peer bağlantısından kaldırıldı');
+                    } catch (error) {
+                        console.error('Track kaldırılırken hata:', error);
+                    }
+                }
+
+                // Track kaldırıldıktan sonra yeni offer gönder
+                if (videoSenders.length > 0) {
+                    try {
+                        await initiateOffer(peerId);
+                        console.log('Kamera kapatma sonrası yeni offer gönderildi:', peerId);
+                    } catch (error) {
+                        console.error('Offer gönderilirken hata:', error);
+                    }
                 }
             }
         });
@@ -1108,15 +1116,26 @@ function leaveRoom() {
 // Odadan çıkma butonu için event listener
 leaveRoomButton.addEventListener('click', leaveRoom);
 
-// Socket.io event listener'larına yeni event ekle
+// Socket.io event listener'ını güncelle
 socket.on('peer-camera-stopped', (data) => {
     const peerId = data.userId;
     console.log('Peer kamera durdurma sinyali alındı:', peerId);
     
-    if (remoteVideoElements[peerId] && !remoteVideoElements[peerId].isScreenShare) {
-        console.log('Video elementi kaldırılıyor:', peerId);
-        removeVideoElement(remoteVideoElements[peerId]);
-        delete remoteVideoElements[peerId];
-        reorganizeVideos();
+    // Video elementini bul ve kaldır
+    if (remoteVideoElements[peerId]) {
+        const videoElement = remoteVideoElements[peerId];
+        if (!videoElement.isScreenShare) {
+            console.log('Video elementi kaldırılıyor:', peerId);
+            
+            // Animasyonlu kaldırma
+            videoElement.div.classList.add('removing');
+            setTimeout(() => {
+                if (videoElement.div.parentNode) {
+                    videoElement.div.parentNode.removeChild(videoElement.div);
+                    delete remoteVideoElements[peerId];
+                    reorganizeVideos();
+                }
+            }, 300);
+        }
     }
 });
