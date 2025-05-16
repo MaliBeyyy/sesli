@@ -659,97 +659,98 @@ function makeLinksClickable(text) {
     return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
-// Resim yükleme ve önizleme için gerekli elementler
-const imageUpload = document.getElementById('image-upload');
+// Resim yapıştırma için değişkenler
+let pastedImage = null;
 const imagePreview = document.getElementById('image-preview');
-const previewImage = document.getElementById('preview-image');
-const cancelImage = document.getElementById('cancel-image');
-let selectedImage = null;
+const removePreviewButton = document.querySelector('.remove-preview');
 
-// Modal elementlerini oluştur
-const imageModal = document.createElement('div');
-imageModal.className = 'image-modal';
-const modalImage = document.createElement('img');
-const modalClose = document.createElement('button');
-modalClose.className = 'image-modal-close';
-modalClose.innerHTML = '×';
-imageModal.appendChild(modalImage);
-imageModal.appendChild(modalClose);
-document.body.appendChild(imageModal);
-
-// Resim seçildiğinde
-imageUpload.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            selectedImage = e.target.result;
-            previewImage.src = selectedImage;
-            imagePreview.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
+// Resim yapıştırma olayını dinle
+document.addEventListener('paste', async (e) => {
+    const items = e.clipboardData.items;
+    
+    for (let item of items) {
+        if (item.type.indexOf('image') === 0) {
+            e.preventDefault();
+            const blob = item.getAsFile();
+            pastedImage = blob;
+            
+            // Önizleme göster
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                removePreviewButton.style.display = 'flex';
+            };
+            reader.readAsDataURL(blob);
+            break;
+        }
     }
 });
 
-// Resim iptal edildiğinde
-cancelImage.addEventListener('click', () => {
-    selectedImage = null;
-    imagePreview.classList.add('hidden');
-    imageUpload.value = '';
+// Önizleme kaldırma butonu için olay dinleyici
+removePreviewButton.addEventListener('click', () => {
+    pastedImage = null;
+    imagePreview.style.display = 'none';
+    removePreviewButton.style.display = 'none';
+    imagePreview.src = '';
 });
-
-// Modal kapatma
-modalClose.addEventListener('click', () => {
-    imageModal.classList.remove('active');
-});
-
-// Resme tıklandığında büyük görüntüleme
-function setupImageClickHandler(messageElement) {
-    const image = messageElement.querySelector('img');
-    if (image) {
-        image.addEventListener('click', () => {
-            modalImage.src = image.src;
-            imageModal.classList.add('active');
-        });
-    }
-}
 
 // Mesaj gönderme fonksiyonunu güncelle
-chatForm.addEventListener('submit', (e) => {
+chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if ((chatInput.value || selectedImage) && socket) {
-        console.log('Mesaj gönderiliyor:', chatInput.value);
-        // Mesajı gönder
-        socket.emit('chat message', {
+    if ((chatInput.value || pastedImage) && socket) {
+        let messageData = {
             text: chatInput.value,
             sender: myUsername || 'Misafir',
-            type: 'message',
-            image: selectedImage
-        });
-        
-        // Kendi mesajımızı hemen göster
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message', 'my-message');
-        let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
-        if (chatInput.value) {
-            messageContent += makeLinksClickable(chatInput.value);
-        }
-        if (selectedImage) {
-            messageContent += `<br><img src="${selectedImage}" alt="Gönderilen resim">`;
-        }
-        messageElement.innerHTML = messageContent;
-        messages.appendChild(messageElement);
-        messages.scrollTop = messages.scrollHeight;
-        
-        // Resim önizlemeyi temizle
-        selectedImage = null;
-        imagePreview.classList.add('hidden');
-        imageUpload.value = '';
-        
-        chatInput.value = '';
+            type: 'message'
+        };
 
-        // Resme tıklama olayını ekle
-        setupImageClickHandler(messageElement);
+        // Eğer resim varsa, base64'e çevir ve mesaja ekle
+        if (pastedImage) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                messageData.image = e.target.result;
+                
+                // Mesajı gönder
+                socket.emit('chat message', messageData);
+                
+                // Kendi mesajımızı hemen göster
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message', 'my-message');
+                let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
+                if (messageData.text) {
+                    messageContent += makeLinksClickable(messageData.text);
+                }
+                if (messageData.image) {
+                    messageContent += `<br><img src="${messageData.image}" alt="Paylaşılan resim">`;
+                }
+                messageElement.innerHTML = messageContent;
+                messages.appendChild(messageElement);
+                messages.scrollTop = messages.scrollHeight;
+                
+                // Formu temizle
+                chatInput.value = '';
+                pastedImage = null;
+                imagePreview.style.display = 'none';
+                removePreviewButton.style.display = 'none';
+                imagePreview.src = '';
+            };
+            reader.readAsDataURL(pastedImage);
+        } else {
+            // Sadece metin mesajı gönder
+            socket.emit('chat message', messageData);
+            
+            // Kendi mesajımızı hemen göster
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'my-message');
+            let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
+            messageContent += makeLinksClickable(chatInput.value);
+            messageElement.innerHTML = messageContent;
+            messages.appendChild(messageElement);
+            messages.scrollTop = messages.scrollHeight;
+            
+            chatInput.value = '';
+        }
     } else {
         console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj/resim yok');
     }
@@ -777,16 +778,13 @@ function setupChatListeners() {
                 messageContent += makeLinksClickable(msg.text);
             }
             if (msg.image) {
-                messageContent += `<br><img src="${msg.image}" alt="Alınan resim">`;
+                messageContent += `<br><img src="${msg.image}" alt="Paylaşılan resim">`;
             }
             messageElement.innerHTML = messageContent;
         }
         
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
-        
-        // Resme tıklama olayını ekle
-        setupImageClickHandler(messageElement);
         
         // Yeni mesaj geldiğinde butonu vurgula
         highlightChatButton();
@@ -1230,77 +1228,9 @@ socket.on('peer-camera-stopped', (data) => {
 
 // Yapıştırma olayını dinle
 window.addEventListener('paste', async (e) => {
-    try {
-        const clipboardItems = await navigator.clipboard.read();
-        console.log('Pano içeriği okunuyor...');
-
-        for (const clipboardItem of clipboardItems) {
-            for (const type of clipboardItem.types) {
-                if (type.startsWith('image/')) {
-                    const blob = await clipboardItem.getType(type);
-                    const reader = new FileReader();
-                    
-                    reader.onload = (e) => {
-                        console.log('Resim başarıyla okundu');
-                        selectedImage = e.target.result;
-                        previewImage.src = selectedImage;
-                        imagePreview.classList.remove('hidden');
-                    };
-                    
-                    reader.readAsDataURL(blob);
-                    return;
-                }
-            }
-        }
-    } catch (err) {
-        // Eğer yeni API desteklenmiyorsa, eski yöntemi dene
-        try {
-            const items = e.clipboardData.items;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf('image') !== -1) {
-                    const blob = items[i].getAsFile();
-                    const reader = new FileReader();
-                    
-                    reader.onload = (e) => {
-                        console.log('Resim başarıyla okundu (eski yöntem)');
-                        selectedImage = e.target.result;
-                        previewImage.src = selectedImage;
-                        imagePreview.classList.remove('hidden');
-                    };
-                    
-                    reader.readAsDataURL(blob);
-                    return;
-                }
-            }
-        } catch (error) {
-            console.error('Resim yapıştırma hatası:', error);
-        }
-    }
-});
-
-// Ayrıca drop olayını da ekleyelim
-chatInput.addEventListener('drop', (e) => {
-    e.preventDefault();
-    console.log('Drop olayı tetiklendi');
-    
-    const items = e.dataTransfer.items;
-    
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        
-        if (item.type.indexOf('image') !== -1) {
-            const file = item.getAsFile();
-            const reader = new FileReader();
-            
-            reader.onload = (e) => {
-                selectedImage = e.target.result;
-                previewImage.src = selectedImage;
-                imagePreview.classList.remove('hidden');
-            };
-            
-            reader.readAsDataURL(file);
-            break;
-        }
+    // Metin yapıştırma işlemlerini engelleme
+    if (document.activeElement !== chatInput) {
+        e.preventDefault();
     }
 });
 
