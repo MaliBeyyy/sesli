@@ -155,42 +155,26 @@
         #remoteVideoContainer, #cameraVideoContainer {
             margin-top: 20px;
             display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             width: 100%;
             padding: 10px;
             justify-content: start;
         }
 
-        /* Ekran paylaşımı container'ı için özel stiller */
-        #remoteVideoContainer {
-            grid-template-columns: repeat(auto-fit, minmax(800px, 1fr));
-            margin-bottom: 30px;
-        }
-
-        #remoteVideoContainer .video-wrapper {
-            max-width: 1200px;
-            min-width: 800px;
-            margin: 0 auto;
-        }
-
-        /* Kamera container'ı için özel stiller */
-        #cameraVideoContainer {
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        }
-
-        /* Tek kamera olduğunda */
+        /* Tek video olduğunda */
         #cameraVideoContainer:has(> .video-wrapper:only-child) {
             display: flex;
             justify-content: flex-start;
             padding-left: 20px;
         }
 
-        /* İki kamera olduğunda */
+        /* İki video olduğunda */
         #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             justify-content: center;
-            max-width: 1000px;
+            max-width: 1400px;
             margin-left: auto;
             margin-right: auto;
             gap: 30px;
@@ -198,18 +182,18 @@
         }
 
         #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) .video-wrapper {
-            max-width: 450px;
-            min-width: 300px;
+            max-width: 650px;
+            min-width: 500px;
             width: 100%;
         }
 
-        /* Üç veya daha fazla kamera olduğunda */
+        /* Üç veya daha fazla video olduğunda */
         #cameraVideoContainer:has(> .video-wrapper:nth-child(3)) {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
             justify-content: center;
             gap: 20px;
-            max-width: 1200px;
+            max-width: 1600px;
             margin-left: auto;
             margin-right: auto;
         }
@@ -706,15 +690,6 @@
 
         /* Mobil cihazlar için düzenleme */
         @media (max-width: 1200px) {
-            #remoteVideoContainer {
-                grid-template-columns: 1fr;
-            }
-            
-            #remoteVideoContainer .video-wrapper {
-                min-width: auto;
-                max-width: 100%;
-            }
-
             #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) {
                 grid-template-columns: 1fr;
                 max-width: 800px;
@@ -724,26 +699,6 @@
                 max-width: 100%;
                 min-width: auto;
             }
-        }
-
-        .message a {
-            color: #007bff;
-            text-decoration: none;
-            transition: all 0.2s ease;
-        }
-
-        .message a:hover {
-            color: #0056b3;
-            text-decoration: underline;
-        }
-
-        .my-message a {
-            color: #ffffff;
-            text-decoration: underline;
-        }
-
-        .my-message a:hover {
-            color: #e6e6e6;
         }
 
     </style>
