@@ -695,6 +695,53 @@ removePreviewButton.addEventListener('click', () => {
     imagePreview.src = '';
 });
 
+// Modal işlevselliği için değişkenler
+const imageModal = document.querySelector('.image-modal');
+const modalImg = imageModal.querySelector('img');
+const closeModal = imageModal.querySelector('.close-modal');
+
+// Modal açma fonksiyonu
+function openModal(imgSrc) {
+    imageModal.style.display = 'flex';
+    modalImg.src = imgSrc;
+    // Animasyon için timeout kullan
+    setTimeout(() => {
+        imageModal.classList.add('show');
+        imageModal.querySelector('.modal-content').classList.add('show');
+    }, 10);
+    // Kapatma için ESC tuşunu dinle
+    document.addEventListener('keydown', handleEscKey);
+}
+
+// Modal kapatma fonksiyonu
+function closeModalFunc() {
+    imageModal.classList.remove('show');
+    imageModal.querySelector('.modal-content').classList.remove('show');
+    setTimeout(() => {
+        imageModal.style.display = 'none';
+        modalImg.src = '';
+    }, 300);
+    // ESC dinleyicisini kaldır
+    document.removeEventListener('keydown', handleEscKey);
+}
+
+// ESC tuşu için event handler
+function handleEscKey(e) {
+    if (e.key === 'Escape') {
+        closeModalFunc();
+    }
+}
+
+// Modal dışına tıklamayı dinle
+imageModal.addEventListener('click', (e) => {
+    if (e.target === imageModal) {
+        closeModalFunc();
+    }
+});
+
+// Kapatma butonunu dinle
+closeModal.addEventListener('click', closeModalFunc);
+
 // Mesaj gönderme fonksiyonunu güncelle
 chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -722,7 +769,7 @@ chatForm.addEventListener('submit', async (e) => {
                     messageContent += makeLinksClickable(messageData.text);
                 }
                 if (messageData.image) {
-                    messageContent += `<br><img src="${messageData.image}" alt="Paylaşılan resim">`;
+                    messageContent += `<br><img src="${messageData.image}" alt="Paylaşılan resim" style="cursor: pointer" onclick="openModal('${messageData.image}')">`;
                 }
                 messageElement.innerHTML = messageContent;
                 messages.appendChild(messageElement);
@@ -778,7 +825,7 @@ function setupChatListeners() {
                 messageContent += makeLinksClickable(msg.text);
             }
             if (msg.image) {
-                messageContent += `<br><img src="${msg.image}" alt="Paylaşılan resim">`;
+                messageContent += `<br><img src="${msg.image}" alt="Paylaşılan resim" style="cursor: pointer" onclick="openModal('${msg.image}')">`;
             }
             messageElement.innerHTML = messageContent;
         }

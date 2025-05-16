@@ -776,6 +776,79 @@
             }        
         }
 
+        /* Modal stilleri */
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 1001;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .image-modal.show {
+            opacity: 1;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90vh;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-content.show {
+            transform: scale(1);
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .close-modal {
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            width: 30px;
+            height: 30px;
+            background: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+
+        .close-modal:hover {
+            background: var(--button-hover);
+            transform: scale(1.1);
+        }
+
+        @media (max-width: 768px) {
+            .close-modal {
+                top: -40px;
+                right: 0;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -863,6 +936,14 @@
                 <button id="chat-submit" type="submit">Gönder</button>
             </div>
         </form>
+    </div>
+
+    <!-- Resim Modalı -->
+    <div class="image-modal">
+        <div class="modal-content">
+            <button class="close-modal">×</button>
+            <img src="" alt="Büyütülmüş görüntü">
+        </div>
     </div>
 
     <footer id="footer-section">
