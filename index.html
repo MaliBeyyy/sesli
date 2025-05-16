@@ -163,26 +163,28 @@
 
         /* Ekran paylaşımı container'ı için özel stiller */
         #remoteVideoContainer {
-            grid-template-columns: repeat(auto-fit, minmax(800px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(1000px, 1fr));
             margin-bottom: 30px;
         }
 
         #remoteVideoContainer .video-wrapper {
-            max-width: 1200px;
-            min-width: 800px;
+            max-width: 1600px;
+            min-width: 1000px;
             margin: 0 auto;
         }
 
         /* Kamera container'ı için özel stiller */
         #cameraVideoContainer {
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
         /* Tek kamera olduğunda */
         #cameraVideoContainer:has(> .video-wrapper:only-child) {
             display: flex;
-            justify-content: flex-start;
-            padding-left: 20px;
+            justify-content: center;
+            padding: 20px;
         }
 
         /* İki kamera olduğunda */
@@ -223,7 +225,6 @@
             transition: all 0.3s ease;
             aspect-ratio: 16/9;
             width: 100%;
-            max-width: 500px;
             opacity: 1;
             transform: scale(1);
         }
