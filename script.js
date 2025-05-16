@@ -859,46 +859,6 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
                     delete remoteVideoElements[peerId];
                 }
             };
-
-            // Track'in enabled durumunu kontrol et
-            const checkTrackStatus = () => {
-                if (!event.track.enabled || event.track.readyState === 'ended') {
-                    if (remoteVideoElements[peerId]) {
-                        removeVideoElement(remoteVideoElements[peerId]);
-                        delete remoteVideoElements[peerId];
-                    }
-                }
-            };
-
-            // Track durumunu periyodik olarak kontrol et
-            const trackCheckInterval = setInterval(checkTrackStatus, 1000);
-
-            // Track sonlandığında interval'i temizle
-            event.track.onended = () => {
-                clearInterval(trackCheckInterval);
-                checkTrackStatus();
-            };
-
-            // Stream'in durumunu da dinle
-            event.streams[0].onremovetrack = (e) => {
-                if (e.track.kind === 'video') {
-                    clearInterval(trackCheckInterval);
-                    if (remoteVideoElements[peerId]) {
-                        removeVideoElement(remoteVideoElements[peerId]);
-                        delete remoteVideoElements[peerId];
-                    }
-                }
-            };
-        }
-    };
-
-    // Peer bağlantısı kapandığında tüm medya elementlerini temizle
-    pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            if (remoteVideoElements[peerId]) {
-                removeVideoElement(remoteVideoElements[peerId]);
-                delete remoteVideoElements[peerId];
-            }
         }
     };
 }

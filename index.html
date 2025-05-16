@@ -154,28 +154,28 @@
         /* Video container stilleri */
         #remoteVideoContainer, #cameraVideoContainer {
             margin-top: 20px;
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             width: 100%;
             padding: 10px;
+            justify-content: start; /* Varsayılan olarak sola yasla */
         }
 
-        /* İki veya daha fazla video olduğunda container stilini değiştir */
+        /* İki video olduğunda container stilini değiştir */
         #remoteVideoContainer:has(> .video-wrapper:nth-child(2)),
         #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) {
-            justify-content: center;
-            max-width: 1200px;
+            grid-template-columns: repeat(2, minmax(300px, 1fr));
+            justify-content: center; /* İki video olduğunda ortala */
+            max-width: 1200px; /* Maksimum genişlik */
             margin-left: auto;
             margin-right: auto;
         }
 
-        /* Tek video olduğunda video boyutunu sınırla ve sola yasla */
+        /* Tek video olduğunda video boyutunu sınırla */
         .video-wrapper:only-child {
-            max-width: 600px;
+            max-width: 600px; /* Tek video için maksimum genişlik */
             width: 100%;
-            margin-right: auto;
-            margin-left: 0;
         }
 
         .video-wrapper {
@@ -183,7 +183,7 @@
             border-radius: 8px;
             padding: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            width: calc(50% - 20px); /* İki video için yan yana */
+            width: 100%;
             aspect-ratio: 16/9;
             transition: all 0.3s ease-in-out;
             opacity: 1;
@@ -664,16 +664,17 @@
         /* Mobil cihazlar için düzenleme */
         @media (max-width: 768px) {
             #remoteVideoContainer, #cameraVideoContainer {
+                grid-template-columns: 1fr;
                 padding: 5px;
             }
 
-            .video-wrapper {
-                width: 100%;
+            #remoteVideoContainer:has(> .video-wrapper:nth-child(2)),
+            #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) {
+                grid-template-columns: 1fr;
             }
 
             .video-wrapper:only-child {
                 max-width: 100%;
-                margin: 0;
             }
         }
 
