@@ -27,11 +27,26 @@ const io = socketIO(server, {
         allowedHeaders: ["*"],
         credentials: true
     },
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000, // Ping zaman aşımını artır
+    pingInterval: 25000, // Ping aralığını artır
+    connectTimeout: 30000, // Bağlantı zaman aşımını artır
+    maxHttpBufferSize: 1e8, // Buffer boyutunu artır
+    allowEIO3: true, // Socket.IO v3 uyumluluğu
+    // Yeniden bağlanma ayarları
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000
 });
 
-// Her oda için ayrı kullanıcı listesi ve host bilgisi tutacağız
-const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } }, host: socketId } }
+// Bağlantı durumunu izle
+io.engine.on("connection_error", (err) => {
+    console.error("[Sunucu] Bağlantı hatası:", err.code, err.message);
+});
+
+// Her oda için ayrı kullanıcı listesi tutacağız
+const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } } } }
 
 io.on('connection', (socket) => {
     const clientQueryUsername = socket.handshake.query.username;
@@ -40,15 +55,56 @@ io.on('connection', (socket) => {
     
     console.log(`[Sunucu] Yeni bağlantı: ID=${socket.id}, Oda=${roomId}, Username=${processedUsername}`);
 
-    // Oda yoksa oluştur ve ilk katılanı host yap
+    // Soket bağlantı durumunu izle
+    socket.conn.on("packet", (packet) => {
+        if (packet.type === "ping") {
+            console.log(`[Sunucu] Ping alındı: ${socket.id}`);
+        }
+    });
+
+    socket.conn.on("error", (error) => {
+        console.error(`[Sunucu] Soket hatası (${socket.id}):`, error);
+    });
+
+    // Oda yoksa oluştur
     if (!rooms.has(roomId)) {
-        rooms.set(roomId, { 
-            peers: {}, 
-            host: socket.id // İlk katılan kişiyi host yap
-        });
+        rooms.set(roomId, { peers: {} });
     }
 
     const room = rooms.get(roomId);
+
+    // Yeniden bağlanma durumu için yeni olay dinleyicisi
+    socket.on('rejoin-room', (data) => {
+        const { roomId, username } = data;
+        console.log(`[Sunucu] Kullanıcı yeniden bağlanıyor: ${username} (ID: ${socket.id}, Oda: ${roomId})`);
+        
+        if (!rooms.has(roomId)) {
+            rooms.set(roomId, { peers: {} });
+        }
+        
+        const room = rooms.get(roomId);
+        
+        // Odadaki mevcut kullanıcıları yeniden bağlanan kullanıcıya bildir
+        const existingPeersData = Object.entries(room.peers).map(([id, data]) => ({ 
+            id, 
+            username: data.username 
+        }));
+        socket.emit('existing-peers', existingPeersData);
+        
+        // Odadaki diğer kullanıcılara yeniden bağlanan kullanıcıyı bildir
+        Object.values(room.peers).forEach(peerData => {
+            if (peerData.socket && peerData.socket.id !== socket.id) {
+                peerData.socket.emit('peer-joined', { 
+                    newPeerId: socket.id, 
+                    username: username 
+                });
+            }
+        });
+        
+        // Kullanıcıyı odaya ekle
+        room.peers[socket.id] = { socket: socket, username: username };
+        socket.join(roomId);
+    });
 
     // Odadaki mevcut kullanıcıları yeni kullanıcıya bildir
     const existingPeersData = Object.entries(room.peers).map(([id, data]) => ({ 
