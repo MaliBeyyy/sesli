@@ -203,16 +203,6 @@
             font-weight: bold;
             color: var(--text-color);
         }
-
-        /* Video bölümleri başlıkları */
-        .video-section-title {
-            margin-top: 30px;
-            margin-bottom: 15px;
-            color: var(--text-color);
-            font-size: 1.5em;
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 8px;
-        }
         
         #remoteAudioContainer div { 
             margin-bottom: 15px; 
@@ -664,27 +654,6 @@
             }
         }
 
-        #messages .message a {
-            color: #007bff;
-            text-decoration: none;
-            word-break: break-all;
-            transition: color 0.2s;
-        }
-
-        #messages .message a:hover {
-            color: #0056b3;
-            text-decoration: underline;
-        }
-
-        /* Dark tema için link renkleri */
-        :root[data-theme="dark"] #messages .message a {
-            color: #66b0ff;
-        }
-
-        :root[data-theme="dark"] #messages .message a:hover {
-            color: #99ccff;
-        }
-
     </style>
 </head>
 <body>
@@ -728,14 +697,20 @@
             <!-- Uzak sesler buraya eklenecek -->
         </div>
         
-        <h2 class="video-section-title">Kamera Görüntüleri</h2>
-        <div id="cameraVideoContainer">
-            <!-- Kamera görüntüleri buraya eklenecek -->
-        </div>
-
-        <h2 class="video-section-title">Ekran Paylaşımları</h2>
-        <div id="remoteVideoContainer">
-            <!-- Ekran paylaşımları buraya eklenecek -->
+        <div id="mediaContainer">
+            <div id="cameraSection">
+                <h2>Kamera Görüntüleri</h2>
+                <div id="cameraVideoContainer">
+                    <!-- Kamera görüntüleri buraya eklenecek -->
+                </div>
+            </div>
+            
+            <div id="screenShareSection">
+                <h2>Ekran Paylaşımları</h2>
+                <div id="remoteVideoContainer">
+                    <!-- Ekran paylaşımları buraya eklenecek -->
+                </div>
+            </div>
         </div>
     </div>
 

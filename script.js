@@ -810,8 +810,8 @@ stopScreenShareButton.addEventListener('click', stopScreenShare);
 // Uzak video elementini oluşturma fonksiyonu
 function createRemoteVideo(peerId, peerUsername, isScreenShare = false) {
     const videoWrapper = document.createElement('div');
+    videoWrapper.className = 'video-wrapper loading';
     videoWrapper.id = `remoteVideoDiv-${peerId}`;
-    videoWrapper.style.marginBottom = '10px';
 
     const label = document.createElement('p');
     label.textContent = isScreenShare ? `${peerUsername} Ekran Paylaşımı` : `${peerUsername} Kamerası`;
@@ -819,15 +819,21 @@ function createRemoteVideo(peerId, peerUsername, isScreenShare = false) {
     const video = document.createElement('video');
     video.autoplay = true;
     video.playsInline = true;
-    video.style.maxWidth = '100%';
     
     if (isScreenShare) {
         video.classList.add('screen-share-video');
+        document.getElementById('remoteVideoContainer').appendChild(videoWrapper);
+    } else {
+        document.getElementById('cameraVideoContainer').appendChild(videoWrapper);
     }
     
     videoWrapper.appendChild(label);
     videoWrapper.appendChild(video);
-    remoteAudioContainer.appendChild(videoWrapper);
+
+    // Animasyon için timeout
+    setTimeout(() => {
+        videoWrapper.classList.remove('loading');
+    }, 100);
     
     return { div: videoWrapper, video: video };
 }
@@ -861,7 +867,6 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
                 leftDiv.appendChild(remoteAudio);
                 peerDiv.appendChild(leftDiv);
 
-                // Host ise atma butonu ekle
                 if (isHost && socket.id !== peerId) {
                     const kickButton = document.createElement('button');
                     kickButton.textContent = 'Odadan At';
@@ -881,7 +886,7 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
                     
                     peerDiv.appendChild(kickButton);
                 }
-                
+         
                 remoteAudioContainer.appendChild(peerDiv);
                 remoteAudioElements[peerId] = { 
                     div: peerDiv, 
@@ -893,10 +898,15 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
             audioWrapper.audio.srcObject = event.streams[0];
         } else if (event.track.kind === 'video') {
             let videoWrapper = remoteVideoElements[peerId];
-            if (!videoWrapper) {
-                const isScreenShare = event.track.label.toLowerCase().includes('screen') || 
-                                    event.track.label.toLowerCase().includes('display');
+            const isScreenShare = event.track.label.toLowerCase().includes('screen') || 
+                                event.track.label.toLowerCase().includes('display');
+            
+            if (!videoWrapper || (videoWrapper.isScreenShare !== isScreenShare)) {
+                if (videoWrapper) {
+                    videoWrapper.div.remove();
+                }
                 videoWrapper = createRemoteVideo(peerId, peerUsername, isScreenShare);
+                videoWrapper.isScreenShare = isScreenShare;
                 remoteVideoElements[peerId] = videoWrapper;
             }
             videoWrapper.video.srcObject = event.streams[0];
@@ -927,6 +937,13 @@ async function startCamera() {
         });
 
         // Yerel kamera görüntüsünü göster
+        const localVideoWrapper = document.createElement('div');
+        localVideoWrapper.id = 'localVideoWrapper';
+        localVideoWrapper.className = 'video-wrapper loading';
+        
+        const label = document.createElement('p');
+        label.textContent = 'Senin Kameran';
+
         const localVideo = document.createElement('video');
         localVideo.id = 'localVideo';
         localVideo.autoplay = true;
@@ -934,16 +951,16 @@ async function startCamera() {
         localVideo.muted = true;
         localVideo.srcObject = cameraStream;
         
-        const localVideoWrapper = document.createElement('div');
-        localVideoWrapper.id = 'localVideoWrapper';
-        localVideoWrapper.className = 'video-wrapper';
-        
-        const label = document.createElement('p');
-        label.textContent = 'Senin Kameran';
-        
         localVideoWrapper.appendChild(label);
         localVideoWrapper.appendChild(localVideo);
-        remoteVideoContainer.insertBefore(localVideoWrapper, remoteVideoContainer.firstChild);
+        
+        const cameraContainer = document.getElementById('cameraVideoContainer');
+        cameraContainer.insertBefore(localVideoWrapper, cameraContainer.firstChild);
+
+        // Animasyon için timeout
+        setTimeout(() => {
+            localVideoWrapper.classList.remove('loading');
+        }, 100);
 
     } catch (error) {
         console.error('Kamera başlatılırken hata:', error);
@@ -956,23 +973,24 @@ function stopCamera() {
     if (cameraStream) {
         cameraStream.getTracks().forEach(track => {
             track.stop();
-            // Tüm peer bağlantılarından kamera track'lerini kaldır
             Object.values(peerConnections).forEach(pc => {
                 const senders = pc.getSenders();
                 senders.forEach(sender => {
-                    if (sender.track && sender.track.kind === 'video') {
+                    if (sender.track && sender.track.kind === 'video' && !sender.track.label.toLowerCase().includes('screen')) {
                         pc.removeTrack(sender);
                     }
                 });
             });
         });
         cameraStream = null;
-    }
 
-    // Yerel video elementini kaldır
-    const localVideoWrapper = document.getElementById('localVideoWrapper');
-    if (localVideoWrapper) {
-        localVideoWrapper.remove();
+        const localVideoWrapper = document.getElementById('localVideoWrapper');
+        if (localVideoWrapper) {
+            localVideoWrapper.classList.add('loading');
+            setTimeout(() => {
+                localVideoWrapper.remove();
+            }, 300);
+        }
     }
 
     cameraButton.classList.remove('hidden');
