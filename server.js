@@ -150,7 +150,8 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('chat message', {
             text: msg.text,
             sender: msg.sender || 'Misafir',
-            type: msg.type
+            type: msg.type,
+            image: msg.image
         });
     });
 
