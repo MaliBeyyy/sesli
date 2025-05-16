@@ -659,31 +659,103 @@ function makeLinksClickable(text) {
     return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
+// Resim yükleme ve önizleme için gerekli elementler
+const imageUpload = document.getElementById('image-upload');
+const imagePreview = document.getElementById('image-preview');
+const previewImage = document.getElementById('preview-image');
+const cancelImage = document.getElementById('cancel-image');
+let selectedImage = null;
+
+// Modal elementlerini oluştur
+const imageModal = document.createElement('div');
+imageModal.className = 'image-modal';
+const modalImage = document.createElement('img');
+const modalClose = document.createElement('button');
+modalClose.className = 'image-modal-close';
+modalClose.innerHTML = '×';
+imageModal.appendChild(modalImage);
+imageModal.appendChild(modalClose);
+document.body.appendChild(imageModal);
+
+// Resim seçildiğinde
+imageUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            selectedImage = e.target.result;
+            previewImage.src = selectedImage;
+            imagePreview.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// Resim iptal edildiğinde
+cancelImage.addEventListener('click', () => {
+    selectedImage = null;
+    imagePreview.classList.add('hidden');
+    imageUpload.value = '';
+});
+
+// Modal kapatma
+modalClose.addEventListener('click', () => {
+    imageModal.classList.remove('active');
+});
+
+// Resme tıklandığında büyük görüntüleme
+function setupImageClickHandler(messageElement) {
+    const image = messageElement.querySelector('img');
+    if (image) {
+        image.addEventListener('click', () => {
+            modalImage.src = image.src;
+            imageModal.classList.add('active');
+        });
+    }
+}
+
+// Mesaj gönderme fonksiyonunu güncelle
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (chatInput.value && socket) {
+    if ((chatInput.value || selectedImage) && socket) {
         console.log('Mesaj gönderiliyor:', chatInput.value);
         // Mesajı gönder
         socket.emit('chat message', {
             text: chatInput.value,
             sender: myUsername || 'Misafir',
-            type: 'message'
+            type: 'message',
+            image: selectedImage
         });
         
         // Kendi mesajımızı hemen göster
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', 'my-message');
-        messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${makeLinksClickable(chatInput.value)}`;
+        let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
+        if (chatInput.value) {
+            messageContent += makeLinksClickable(chatInput.value);
+        }
+        if (selectedImage) {
+            messageContent += `<br><img src="${selectedImage}" alt="Gönderilen resim">`;
+        }
+        messageElement.innerHTML = messageContent;
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
         
+        // Resim önizlemeyi temizle
+        selectedImage = null;
+        imagePreview.classList.add('hidden');
+        imageUpload.value = '';
+        
         chatInput.value = '';
+
+        // Resme tıklama olayını ekle
+        setupImageClickHandler(messageElement);
     } else {
-        console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj boş');
+        console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj/resim yok');
     }
 });
 
-// Socket.IO mesaj olaylarını dinle
+// Socket.IO mesaj dinleyicisini güncelle
 function setupChatListeners() {
     if (!socket) return;
     
@@ -700,11 +772,21 @@ function setupChatListeners() {
             messageElement.classList.add('system-message');
             messageElement.innerHTML = `${msg.sender} ${msg.text}`;
         } else {
-            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${makeLinksClickable(msg.text)}`;
+            let messageContent = `<strong>${msg.sender}:</strong> `;
+            if (msg.text) {
+                messageContent += makeLinksClickable(msg.text);
+            }
+            if (msg.image) {
+                messageContent += `<br><img src="${msg.image}" alt="Alınan resim">`;
+            }
+            messageElement.innerHTML = messageContent;
         }
         
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
+        
+        // Resme tıklama olayını ekle
+        setupImageClickHandler(messageElement);
         
         // Yeni mesaj geldiğinde butonu vurgula
         highlightChatButton();
