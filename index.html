@@ -724,11 +724,28 @@
         }
 
         #image-preview {
+<<<<<<< Updated upstream
+=======
+            position: relative;
+            padding: 10px;
+            background: var(--chat-bg);
+            border-top: 1px solid var(--chat-border);
+            display: flex;
+            justify-content: center;
+        }
+
+        #image-preview.hidden {
+            display: none;
+        }
+
+        #preview-image {
+>>>>>>> Stashed changes
             max-width: 200px;
             max-height: 200px;
             display: none;
             margin: 10px 0;
             border-radius: 8px;
+            object-fit: contain;
         }
 
         .message img {
@@ -753,6 +770,37 @@
             width: 24px;
             height: 24px;
             cursor: pointer;
+<<<<<<< Updated upstream
+=======
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        #cancel-image:hover {
+            background: rgba(0, 0, 0, 0.7);
+            transform: scale(1.1);
+        }
+
+        .message img {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 8px;
+            margin-top: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            object-fit: contain;
+        }
+
+        .message img:hover {
+            transform: scale(1.05);
+        }
+
+        /* Tam ekran görüntüleme için modal */
+        .image-modal {
+>>>>>>> Stashed changes
             display: none;
             align-items: center;
             justify-content: center;
@@ -855,11 +903,22 @@
         <div id="messages"></div>
         <form id="chat-form">
             <div class="chat-input-container">
+<<<<<<< Updated upstream
                 <div class="preview-container">
                     <img id="image-preview" alt="Önizleme">
                     <button type="button" class="remove-preview" title="Resmi Kaldır">×</button>
                 </div>
                 <input id="chat-input" type="text" placeholder="Mesajınızı yazın veya resim yapıştırın..." autocomplete="off">
+=======
+                <input id="chat-input" type="text" placeholder="Mesajınızı yazın veya Ctrl+V ile resim yapıştırın..." autocomplete="off">
+                <label for="image-upload" class="image-upload-label" title="Resim Yükle">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                </label>
+                <input type="file" id="image-upload" accept="image/*" class="hidden">
+>>>>>>> Stashed changes
                 <button id="chat-submit" type="submit">Gönder</button>
             </div>
         </form>
