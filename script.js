@@ -1229,14 +1229,58 @@ socket.on('peer-camera-stopped', (data) => {
 });
 
 // Yapıştırma olayını dinle
-chatInput.addEventListener('paste', (e) => {
-    const items = e.clipboardData.items;
+document.addEventListener('paste', (e) => {
+    console.log('Yapıştırma olayı tetiklendi');
     
+    // Eğer chat-input odakta değilse, işlemi yapma
+    if (document.activeElement !== chatInput) {
+        console.log('Chat input odakta değil, yapıştırma işlemi iptal edildi');
+        return;
+    }
+
+    const items = e.clipboardData.items;
+    console.log('Pano içeriği:', items);
+
     for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
+        const item = items[i];
+        console.log('İçerik türü:', item.type);
+        
+        if (item.type.indexOf('image') !== -1) {
+            console.log('Resim bulundu, işleniyor...');
             e.preventDefault(); // Varsayılan yapıştırma işlemini engelle
             
             const file = items[i].getAsFile();
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                console.log('Resim yüklendi, önizleme gösteriliyor');
+                selectedImage = e.target.result;
+                previewImage.src = selectedImage;
+                imagePreview.classList.remove('hidden');
+            };
+            
+            reader.onerror = (error) => {
+                console.error('Resim okuma hatası:', error);
+            };
+            
+            reader.readAsDataURL(file);
+            break;
+        }
+    }
+});
+
+// Ayrıca drop olayını da ekleyelim
+chatInput.addEventListener('drop', (e) => {
+    e.preventDefault();
+    console.log('Drop olayı tetiklendi');
+    
+    const items = e.dataTransfer.items;
+    
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        
+        if (item.type.indexOf('image') !== -1) {
+            const file = item.getAsFile();
             const reader = new FileReader();
             
             reader.onload = (e) => {
@@ -1249,4 +1293,9 @@ chatInput.addEventListener('paste', (e) => {
             break;
         }
     }
+});
+
+// Sürükleme olaylarını engelle
+chatInput.addEventListener('dragover', (e) => {
+    e.preventDefault();
 });
