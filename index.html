@@ -159,65 +159,76 @@
             gap: 20px;
             width: 100%;
             padding: 10px;
-            justify-content: start; /* Varsayılan olarak sola yasla */
+            justify-content: start;
         }
 
-        /* İki video olduğunda container stilini değiştir */
-        #remoteVideoContainer:has(> .video-wrapper:nth-child(2)),
+        /* Tek video olduğunda */
+        #cameraVideoContainer:has(> .video-wrapper:only-child) {
+            display: flex;
+            justify-content: flex-start;
+            padding-left: 20px;
+        }
+
+        /* İki video olduğunda */
         #cameraVideoContainer:has(> .video-wrapper:nth-child(2)) {
+            display: grid;
             grid-template-columns: repeat(2, minmax(300px, 1fr));
-            justify-content: center; /* İki video olduğunda ortala */
-            max-width: 1200px; /* Maksimum genişlik */
+            justify-content: center;
+            max-width: 1200px;
             margin-left: auto;
             margin-right: auto;
         }
 
-        /* Tek video olduğunda video boyutunu sınırla */
-        .video-wrapper:only-child {
-            max-width: 600px; /* Tek video için maksimum genişlik */
-            width: 100%;
+        /* Üç veya daha fazla video olduğunda */
+        #cameraVideoContainer:has(> .video-wrapper:nth-child(3)) {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            justify-content: center;
+            gap: 20px;
+            max-width: 1600px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
+        /* Video wrapper stilleri */
         .video-wrapper {
-            background-color: var(--container-bg);
-            border-radius: 8px;
-            padding: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            width: 100%;
-            aspect-ratio: 16/9;
-            transition: all 0.3s ease-in-out;
-            opacity: 1;
             position: relative;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            aspect-ratio: 16/9;
+            width: 100%;
+            max-width: 500px;
         }
 
-        .video-wrapper.loading {
-            opacity: 0;
-            transform: scale(0.9);
+        /* Yerel video için ayna efekti */
+        #localVideoWrapper video {
+            transform: scaleX(-1);
         }
 
-        .video-wrapper.removing {
-            opacity: 0;
-            transform: scale(0.9);
-            pointer-events: none;
+        /* Tek video için maksimum genişlik */
+        .video-wrapper:only-child {
+            max-width: 500px;
+            width: 100%;
         }
 
         .video-wrapper video {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 4px;
         }
 
         .video-wrapper p {
             position: absolute;
             bottom: 10px;
             left: 10px;
-            margin: 0;
-            padding: 5px 10px;
-            background-color: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.7);
             color: white;
+            padding: 5px 10px;
             border-radius: 4px;
-            z-index: 1;
+            margin: 0;
+            font-size: 14px;
         }
         
         #remoteAudioContainer div { 

@@ -143,7 +143,7 @@ function connectToSignalingServer() {
     });
 
     socket.on('peer-joined', (data) => { 
-        console.log('[İstemci] "peer-joined" olayı alındı. Gelen Ham Veri:', JSON.stringify(data)); // Gelen ham veriyi logla
+        console.log('[İstemci] "peer-joined" olayı alındı. Gelen Ham Veri:', JSON.stringify(data)); 
         
         const { newPeerId, username } = data; 
         if (newPeerId === socket.id) return; // Kendimiz için işlem yapma
@@ -152,17 +152,40 @@ function connectToSignalingServer() {
         
         let pc = peerConnections[newPeerId];
         if (!pc) {
-            // Username tanımsızsa veya boşsa, createPeerConnection içinde varsayılan bir isim kullanılır.
-            pc = createPeerConnection(newPeerId, username); // username'i createPeerConnection'a gönder
+            pc = createPeerConnection(newPeerId, username);
             peerConnections[newPeerId] = pc;
             console.log(`[İstemci] ${newPeerId} (${username || 'Bilinmeyen'}) için PeerConnection oluşturuldu (peer-joined).`);
         } else {
             console.log(`[İstemci] ${newPeerId} (${username || 'Bilinmeyen'}) için PeerConnection zaten mevcut (peer-joined).`);
         }
-        // Normalde yeni katılan kullanıcı offer gönderir, biz answer bekleriz.
-        // Eğer bir şekilde bizim offer göndermemiz gerekiyorsa (ki bu senaryoda pek olası değil),
-        // o zaman idsThatNeedMyOffer.add(newPeerId); ve initiateOffer çağrılabilir.
-        // Şimdilik bu kısmı basit tutalım ve offer'ı karşı taraftan bekleyelim.
+
+        // Eğer aktif bir kamera akışımız varsa, yeni katılan kullanıcıya gönder
+        if (cameraStream && cameraStream.active) {
+            console.log('Mevcut kamera akışı yeni kullanıcıya gönderiliyor:', newPeerId);
+            cameraStream.getTracks().forEach(track => {
+                try {
+                    pc.addTrack(track, cameraStream);
+                } catch(e) {
+                    console.error('Kamera track\'i eklenirken hata:', e);
+                }
+            });
+            // Yeni kullanıcıya offer gönder
+            initiateOffer(newPeerId);
+        }
+
+        // Eğer aktif bir ekran paylaşımı varsa, onu da gönder
+        if (screenStream && screenStream.active) {
+            console.log('Mevcut ekran paylaşımı yeni kullanıcıya gönderiliyor:', newPeerId);
+            screenStream.getTracks().forEach(track => {
+                try {
+                    pc.addTrack(track, screenStream);
+                } catch(e) {
+                    console.error('Ekran paylaşımı track\'i eklenirken hata:', e);
+                }
+            });
+            // Yeni kullanıcıya offer gönder
+            initiateOffer(newPeerId);
+        }
     });
 
     socket.on('room-full', () => {
@@ -755,11 +778,13 @@ function createRemoteVideo(peerId, peerUsername, isScreenShare = false) {
         video.classList.add('screen-share-video');
         document.getElementById('remoteVideoContainer').appendChild(videoWrapper);
     } else {
-        document.getElementById('cameraVideoContainer').appendChild(videoWrapper);
+        const cameraContainer = document.getElementById('cameraVideoContainer');
+        cameraContainer.appendChild(videoWrapper);
+        reorganizeVideos();
     }
     
-    videoWrapper.appendChild(label);
     videoWrapper.appendChild(video);
+    videoWrapper.appendChild(label);
 
     // Animasyon için timeout
     setTimeout(() => {
@@ -776,8 +801,32 @@ function removeVideoElement(videoWrapper) {
         setTimeout(() => {
             if (videoWrapper.div.parentNode) {
                 videoWrapper.div.parentNode.removeChild(videoWrapper.div);
+                reorganizeVideos();
             }
         }, 300);
+    }
+}
+
+// Video elementlerini yeniden düzenleme fonksiyonu
+function reorganizeVideos() {
+    const cameraContainer = document.getElementById('cameraVideoContainer');
+    const videos = cameraContainer.querySelectorAll('.video-wrapper');
+    const videoCount = videos.length;
+
+    // Container'ın stilini video sayısına göre ayarla
+    if (videoCount === 1) {
+        cameraContainer.style.justifyContent = 'flex-start';
+        videos[0].style.maxWidth = '500px';
+    } else if (videoCount === 2) {
+        cameraContainer.style.justifyContent = 'center';
+        videos.forEach(video => {
+            video.style.maxWidth = '500px';
+        });
+    } else {
+        cameraContainer.style.justifyContent = 'center';
+        videos.forEach(video => {
+            video.style.maxWidth = '400px';
+        });
     }
 }
 
@@ -850,13 +899,27 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
                 videoWrapper.isScreenShare = isScreenShare;
                 remoteVideoElements[peerId] = videoWrapper;
             }
-            videoWrapper.video.srcObject = event.streams[0];
+            
+            const stream = event.streams[0];
+            videoWrapper.video.srcObject = stream;
 
             // Track'in durumunu dinle
             event.track.onended = () => {
-                if (remoteVideoElements[peerId]) {
+                console.log('Video track ended:', event.track.label);
+                if (remoteVideoElements[peerId] && !isScreenShare) {
                     removeVideoElement(remoteVideoElements[peerId]);
                     delete remoteVideoElements[peerId];
+                }
+            };
+
+            // Stream'in durumunu dinle
+            stream.onremovetrack = () => {
+                console.log('Track removed from stream:', event.track.label);
+                if (stream.getVideoTracks().length === 0 && !isScreenShare) {
+                    if (remoteVideoElements[peerId]) {
+                        removeVideoElement(remoteVideoElements[peerId]);
+                        delete remoteVideoElements[peerId];
+                    }
                 }
             };
         }
@@ -875,24 +938,30 @@ async function startCamera() {
         stopCameraButton.classList.remove('hidden');
 
         // Kamera akışını tüm bağlantılara ekle
-        Object.keys(peerConnections).forEach(async (peerId) => {
+        const peerIds = Object.keys(peerConnections);
+        console.log('Kamera başlatıldı, bağlantılara gönderiliyor. Bağlantı sayısı:', peerIds.length);
+
+        for (const peerId of peerIds) {
             const pc = peerConnections[peerId];
-            if (pc && pc.signalingState === 'stable') {
-                cameraStream.getTracks().forEach(track => {
-                    pc.addTrack(track, cameraStream);
-                });
-                await initiateOffer(peerId);
+            if (pc && pc.signalingState !== 'closed') {
+                try {
+                    cameraStream.getTracks().forEach(track => {
+                        pc.addTrack(track, cameraStream);
+                    });
+                    console.log(`Kamera track'i ${peerId} bağlantısına eklendi`);
+                    await initiateOffer(peerId);
+                    console.log(`Offer ${peerId} bağlantısına gönderildi`);
+                } catch (error) {
+                    console.error(`${peerId} bağlantısına kamera eklenirken hata:`, error);
+                }
             }
-        });
+        }
 
         // Yerel kamera görüntüsünü göster
         const localVideoWrapper = document.createElement('div');
         localVideoWrapper.id = 'localVideoWrapper';
         localVideoWrapper.className = 'video-wrapper loading';
         
-        const label = document.createElement('p');
-        label.textContent = 'Senin Kameran';
-
         const localVideo = document.createElement('video');
         localVideo.id = 'localVideo';
         localVideo.autoplay = true;
@@ -900,11 +969,15 @@ async function startCamera() {
         localVideo.muted = true;
         localVideo.srcObject = cameraStream;
         
-        localVideoWrapper.appendChild(label);
+        const label = document.createElement('p');
+        label.textContent = 'Senin Kameran';
+        
         localVideoWrapper.appendChild(localVideo);
+        localVideoWrapper.appendChild(label);
         
         const cameraContainer = document.getElementById('cameraVideoContainer');
         cameraContainer.insertBefore(localVideoWrapper, cameraContainer.firstChild);
+        reorganizeVideos();
 
         // Animasyon için timeout
         setTimeout(() => {
@@ -920,19 +993,44 @@ async function startCamera() {
 
 function stopCamera() {
     if (cameraStream) {
+        // Önce tüm track'leri durdur
         cameraStream.getTracks().forEach(track => {
             track.stop();
-            Object.values(peerConnections).forEach(pc => {
+        });
+
+        // Peer bağlantılarından kamera track'lerini kaldır
+        Object.values(peerConnections).forEach(pc => {
+            if (pc && pc.signalingState !== 'closed') {
                 const senders = pc.getSenders();
                 senders.forEach(sender => {
                     if (sender.track && sender.track.kind === 'video' && !sender.track.label.toLowerCase().includes('screen')) {
-                        pc.removeTrack(sender);
+                        try {
+                            pc.removeTrack(sender);
+                            console.log('Kamera track\'i peer bağlantısından kaldırıldı');
+                        } catch (error) {
+                            console.error('Track kaldırılırken hata:', error);
+                        }
                     }
                 });
-            });
+
+                // Değişiklikleri bildirmek için yeni bir offer gönder
+                try {
+                    initiateOffer(pc.peerId);
+                } catch (error) {
+                    console.error('Offer gönderilirken hata:', error);
+                }
+            }
         });
+
+        // Diğer kullanıcılara kamera kapatma sinyali gönder
+        if (socket) {
+            socket.emit('camera-stopped');
+            console.log('Kamera kapatma sinyali gönderildi');
+        }
+
         cameraStream = null;
 
+        // Yerel video elementini kaldır
         const localVideoWrapper = document.getElementById('localVideoWrapper');
         if (localVideoWrapper) {
             localVideoWrapper.classList.add('removing');
@@ -1006,3 +1104,11 @@ function leaveRoom() {
 
 // Odadan çıkma butonu için event listener
 leaveRoomButton.addEventListener('click', leaveRoom);
+
+// Socket.io event listener'larına yeni event ekle
+socket.on('peer-camera-stopped', (peerId) => {
+    if (remoteVideoElements[peerId] && !remoteVideoElements[peerId].isScreenShare) {
+        removeVideoElement(remoteVideoElements[peerId]);
+        delete remoteVideoElements[peerId];
+    }
+});

@@ -136,6 +136,13 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Kamera kapatma sinyalini diğer kullanıcılara ilet
+    socket.on('camera-stopped', () => {
+        // Odadaki diğer kullanıcılara bildir
+        socket.to(roomId).emit('peer-camera-stopped', socket.id);
+        console.log(`[Sunucu] ${room.peers[socket.id]?.username || 'Bilinmeyen'} kamerasını kapattı.`);
+    });
+
     socket.on('chat message', (msg) => {
         io.to(roomId).emit('chat message', {
             text: msg.text,
