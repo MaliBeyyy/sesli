@@ -748,17 +748,33 @@
         /* Resim yükleme ve önizleme stilleri */
         .chat-input-container {
             display: flex;
+            align-items: center;
             gap: 8px;
             padding: 10px;
             background: var(--chat-bg);
             border-top: 1px solid var(--chat-border);
         }
 
+        .image-upload-label {
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--button-bg);
+            transition: all 0.2s;
+        }
+
+        .image-upload-label:hover {
+            color: var(--button-hover);
+            transform: scale(1.1);
+        }
+
         #image-preview {
+            position: relative;
             padding: 10px;
             background: var(--chat-bg);
             border-top: 1px solid var(--chat-border);
-            position: relative;
         }
 
         #image-preview.hidden {
@@ -786,27 +802,25 @@
             align-items: center;
             justify-content: center;
             font-size: 18px;
+            transition: all 0.2s;
         }
 
         #cancel-image:hover {
             background: rgba(0, 0, 0, 0.7);
+            transform: scale(1.1);
         }
 
         .message img {
-            max-width: 300px;
-            max-height: 200px;
+            max-width: 200px;
+            max-height: 150px;
             border-radius: 8px;
             margin-top: 5px;
-            cursor: zoom-in;
-            transition: transform 0.2s;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
         .message img:hover {
-            transform: scale(1.02);
-        }
-
-        .message img:active {
-            transform: scale(0.98);
+            transform: scale(1.05);
         }
 
         /* Tam ekran görüntüleme için modal */

@@ -600,93 +600,21 @@ const messages = document.getElementById('messages');
 const clearChatButton = document.getElementById('clear-chat');
 const chatContainer = document.getElementById('chat-container');
 const chatToggle = document.getElementById('chat-toggle');
-const imagePreview = document.getElementById('image-preview');
-const previewImage = document.getElementById('preview-image');
-const cancelImage = document.getElementById('cancel-image');
 
 // Sohbet durumu
 let isChatVisible = true;
-let selectedImage = null;
 
-// URL'leri tıklanabilir bağlantılara dönüştürme fonksiyonu
-function makeLinksClickable(text) {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
-}
-
-// Resim yapıştırma olayını dinle
-chatInput.addEventListener('paste', (e) => {
-    const items = e.clipboardData.items;
-    
-    for (const item of items) {
-        if (item.type.startsWith('image/')) {
-            e.preventDefault();
-            const file = item.getAsFile();
-            const reader = new FileReader();
-            
-            reader.onload = (e) => {
-                selectedImage = e.target.result;
-                previewImage.src = selectedImage;
-                imagePreview.classList.remove('hidden');
-            };
-            
-            reader.readAsDataURL(file);
-            break;
-        }
-    }
-});
-
-// Resmi iptal et
-cancelImage.addEventListener('click', () => {
-    selectedImage = null;
-    imagePreview.classList.add('hidden');
-    previewImage.src = '';
-});
-
-// Mesaj gönderme
-chatForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if ((chatInput.value || selectedImage) && socket) {
-        // Mesajı gönder
-        socket.emit('chat message', {
-            text: chatInput.value,
-            sender: myUsername || 'Misafir',
-            type: 'message',
-            image: selectedImage
-        });
-        
-        // Kendi mesajımızı hemen göster
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message', 'my-message');
-        
-        let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
-        if (chatInput.value) {
-            messageContent += makeLinksClickable(chatInput.value);
-        }
-        if (selectedImage) {
-            messageContent += `<br><img src="${selectedImage}" alt="Gönderilen resim">`;
-        }
-        
-        messageElement.innerHTML = messageContent;
-        messages.appendChild(messageElement);
-        messages.scrollTop = messages.scrollHeight;
-        
-        // Formu temizle
-        chatInput.value = '';
-        selectedImage = null;
-        imagePreview.classList.add('hidden');
-        previewImage.src = '';
-    }
-});
-
-// Sohbeti aç/kapat
+// Sohbeti aç/kapat fonksiyonu
 function toggleChat() {
     isChatVisible = !isChatVisible;
     chatContainer.classList.toggle('hidden', !isChatVisible);
+    
+    // Toggle butonunun ikonunu değiştir
     chatToggle.innerHTML = isChatVisible 
         ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>'
         : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>';
     
+    // Sohbet kapalıyken yeni mesaj gelirse butonu vurgula
     if (!isChatVisible) {
         chatToggle.style.transform = 'scale(1)';
     }
@@ -702,52 +630,144 @@ function highlightChatButton() {
     }
 }
 
-// Sohbeti temizle
+// Toggle butonu için event listener
+chatToggle.addEventListener('click', toggleChat);
+
+// Sohbeti temizleme fonksiyonu
 function clearChat() {
     if (confirm('Tüm sohbet geçmişini silmek istediğinize emin misiniz?')) {
+        while (messages.firstChild) {
+            messages.removeChild(messages.firstChild);
+        }
+        // Temizleme işlemini diğer kullanıcılara bildir
         if (socket) {
-            socket.emit('clear chat');
+            socket.emit('chat message', {
+                text: '--- Sohbet geçmişini temizledi ---',
+                sender: myUsername || 'Misafir',
+                type: 'system'
+            });
         }
     }
 }
 
-// Event listener'ları ekle
-chatToggle.addEventListener('click', toggleChat);
+// Temizleme butonu için event listener
 clearChatButton.addEventListener('click', clearChat);
 
-// Socket.IO mesaj dinleyicileri
+// URL'leri tıklanabilir bağlantılara dönüştürme fonksiyonu
+function makeLinksClickable(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+// Resim yükleme ve önizleme için gerekli elementler
+const imageUpload = document.getElementById('image-upload');
+const imagePreview = document.getElementById('image-preview');
+const previewImage = document.getElementById('preview-image');
+const cancelImage = document.getElementById('cancel-image');
+let selectedImage = null;
+
+// Modal elementlerini oluştur
+const imageModal = document.createElement('div');
+imageModal.className = 'image-modal';
+const modalImage = document.createElement('img');
+const modalClose = document.createElement('button');
+modalClose.className = 'image-modal-close';
+modalClose.innerHTML = '×';
+imageModal.appendChild(modalImage);
+imageModal.appendChild(modalClose);
+document.body.appendChild(imageModal);
+
+// Resim seçildiğinde
+imageUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            selectedImage = e.target.result;
+            previewImage.src = selectedImage;
+            imagePreview.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// Resim iptal edildiğinde
+cancelImage.addEventListener('click', () => {
+    selectedImage = null;
+    imagePreview.classList.add('hidden');
+    imageUpload.value = '';
+});
+
+// Modal kapatma
+modalClose.addEventListener('click', () => {
+    imageModal.classList.remove('active');
+});
+
+// Resme tıklandığında büyük görüntüleme
+function setupImageClickHandler(messageElement) {
+    const image = messageElement.querySelector('img');
+    if (image) {
+        image.addEventListener('click', () => {
+            modalImage.src = image.src;
+            imageModal.classList.add('active');
+        });
+    }
+}
+
+// Mesaj gönderme fonksiyonunu güncelle
+chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if ((chatInput.value || selectedImage) && socket) {
+        console.log('Mesaj gönderiliyor:', chatInput.value);
+        // Mesajı gönder
+        socket.emit('chat message', {
+            text: chatInput.value,
+            sender: myUsername || 'Misafir',
+            type: 'message',
+            image: selectedImage
+        });
+        
+        // Kendi mesajımızı hemen göster
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', 'my-message');
+        let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
+        if (chatInput.value) {
+            messageContent += makeLinksClickable(chatInput.value);
+        }
+        if (selectedImage) {
+            messageContent += `<br><img src="${selectedImage}" alt="Gönderilen resim">`;
+        }
+        messageElement.innerHTML = messageContent;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+        
+        // Resim önizlemeyi temizle
+        selectedImage = null;
+        imagePreview.classList.add('hidden');
+        imageUpload.value = '';
+        
+        chatInput.value = '';
+
+        // Resme tıklama olayını ekle
+        setupImageClickHandler(messageElement);
+    } else {
+        console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj/resim yok');
+    }
+});
+
+// Socket.IO mesaj dinleyicisini güncelle
 function setupChatListeners() {
     if (!socket) return;
     
-    // Önceki mesajları göster
-    socket.on('previous-messages', (messages) => {
-        messages.forEach(msg => {
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message');
-            
-            if (msg.sender === myUsername) {
-                messageElement.classList.add('my-message');
-            }
-            
-            let messageContent = `<strong>${msg.sender}:</strong> `;
-            if (msg.text) {
-                messageContent += makeLinksClickable(msg.text);
-            }
-            if (msg.image) {
-                messageContent += `<br><img src="${msg.image}" alt="Gönderilen resim">`;
-            }
-            messageElement.innerHTML = messageContent;
-            messages.appendChild(messageElement);
-        });
-        messages.scrollTop = messages.scrollHeight;
-    });
-    
     socket.on('chat message', (msg) => {
+        console.log('Mesaj alındı:', msg);
+        // Kendi mesajlarımızı tekrar gösterme (zaten gösterildi)
         if (msg.sender === myUsername && msg.type !== 'system') return;
         
         const messageElement = document.createElement('div');
         messageElement.classList.add('message');
         
+        // Sistem mesajları için farklı stil
         if (msg.type === 'system') {
             messageElement.classList.add('system-message');
             messageElement.innerHTML = `${msg.sender} ${msg.text}`;
@@ -764,21 +784,499 @@ function setupChatListeners() {
         
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
+        
+        // Resme tıklama olayını ekle
+        setupImageClickHandler(messageElement);
+        
+        // Yeni mesaj geldiğinde butonu vurgula
         highlightChatButton();
-    });
-
-    // Sohbet temizlendiğinde
-    socket.on('chat cleared', () => {
-        while (messages.firstChild) {
-            messages.removeChild(messages.firstChild);
-        }
     });
 }
 
-// ... existing code ...
+console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
 
-// Temizleme butonu için event listener
-clearChatButton.addEventListener('click', clearChat);
+// Ekran paylaşımı fonksiyonları
+async function startScreenShare() {
+    try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+            video: true,
+            audio: true 
+        });
+        
+        screenShareButton.classList.add('hidden');
+        stopScreenShareButton.classList.remove('hidden');
+
+        // Ekran paylaşımını tüm bağlantılara ekle
+        Object.keys(peerConnections).forEach(async (peerId) => {
+            const pc = peerConnections[peerId];
+            if (pc && pc.signalingState === 'stable') {
+                screenStream.getTracks().forEach(track => {
+                    pc.addTrack(track, screenStream);
+                });
+                await initiateOffer(peerId);
+            }
+        });
+
+        // Ekran paylaşımı durduğunda
+        screenStream.getVideoTracks()[0].onended = () => {
+            stopScreenShare();
+        };
+
+    } catch (error) {
+        console.error('Ekran paylaşımı başlatılırken hata:', error);
+        alert('Ekran paylaşımı başlatılamadı: ' + error.message);
+    }
+}
+
+function stopScreenShare() {
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => {
+            track.stop();
+            Object.values(peerConnections).forEach(pc => {
+                const sender = pc.getSenders().find(s => s.track === track);
+                if (sender) {
+                    pc.removeTrack(sender);
+                }
+            });
+        });
+        screenStream = null;
+        screenShareButton.classList.remove('hidden');
+        stopScreenShareButton.classList.add('hidden');
+    }
+}
+
+// Event listeners
+screenShareButton.addEventListener('click', startScreenShare);
+stopScreenShareButton.addEventListener('click', stopScreenShare);
+
+// Uzak video elementini oluşturma fonksiyonu
+function createRemoteVideo(peerId, peerUsername, isScreenShare = false) {
+    const videoWrapper = document.createElement('div');
+    videoWrapper.className = 'video-wrapper loading';
+    videoWrapper.id = `remoteVideoDiv-${peerId}`;
+
+    const label = document.createElement('p');
+    label.textContent = isScreenShare ? `${peerUsername} Ekran Paylaşımı` : `${peerUsername} Kamerası`;
+
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.playsInline = true;
+    
+    if (isScreenShare) {
+        video.classList.add('screen-share-video');
+        document.getElementById('remoteVideoContainer').appendChild(videoWrapper);
+    } else {
+        const cameraContainer = document.getElementById('cameraVideoContainer');
+        cameraContainer.appendChild(videoWrapper);
+        reorganizeVideos();
+    }
+    
+    videoWrapper.appendChild(video);
+    videoWrapper.appendChild(label);
+
+    // Animasyon için timeout
+    setTimeout(() => {
+        videoWrapper.classList.remove('loading');
+    }, 100);
+    
+    return { div: videoWrapper, video: video };
+}
+
+// Video elementini kaldırma fonksiyonu
+function removeVideoElement(videoWrapper) {
+    if (videoWrapper && videoWrapper.div) {
+        videoWrapper.div.classList.add('removing');
+        setTimeout(() => {
+            if (videoWrapper.div.parentNode) {
+                videoWrapper.div.parentNode.removeChild(videoWrapper.div);
+                reorganizeVideos();
+            }
+        }, 300);
+    }
+}
+
+// Video elementlerini yeniden düzenleme fonksiyonu
+function reorganizeVideos() {
+    const cameraContainer = document.getElementById('cameraVideoContainer');
+    const videos = cameraContainer.querySelectorAll('.video-wrapper');
+    const videoCount = videos.length;
+
+    // Container'ın stilini video sayısına göre ayarla
+    if (videoCount === 1) {
+        cameraContainer.style.justifyContent = 'flex-start';
+        videos[0].style.maxWidth = '500px';
+    } else if (videoCount === 2) {
+        cameraContainer.style.justifyContent = 'center';
+        videos.forEach(video => {
+            video.style.maxWidth = '500px';
+        });
+    } else {
+        cameraContainer.style.justifyContent = 'center';
+        videos.forEach(video => {
+            video.style.maxWidth = '400px';
+        });
+    }
+}
+
+// PeerConnection track handler'ını güncelle
+function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
+    pc.ontrack = (event) => {
+        if (event.track.kind === 'audio') {
+            let audioWrapper = remoteAudioElements[peerId];
+            if (!audioWrapper) {
+                const peerDiv = document.createElement('div');
+                peerDiv.id = `remoteAudioDiv-${peerId}`;
+                peerDiv.style.marginBottom = '10px';
+                peerDiv.style.display = 'flex';
+                peerDiv.style.justifyContent = 'space-between';
+                peerDiv.style.alignItems = 'center';
+
+                const leftDiv = document.createElement('div');
+                leftDiv.style.flex = '1';
+
+                const label = document.createElement('p');
+                label.textContent = `${peerUsername} (${peerId.substring(0, 6)}...):`;
+                
+                const remoteAudio = document.createElement('audio');
+                remoteAudio.autoplay = true;
+                remoteAudio.controls = true;
+                
+                leftDiv.appendChild(label);
+                leftDiv.appendChild(remoteAudio);
+                peerDiv.appendChild(leftDiv);
+
+                if (isHost && socket.id !== peerId) {
+                    const kickButton = document.createElement('button');
+                    kickButton.textContent = 'Odadan At';
+                    kickButton.style.backgroundColor = '#dc3545';
+                    kickButton.style.color = 'white';
+                    kickButton.style.border = 'none';
+                    kickButton.style.padding = '5px 10px';
+                    kickButton.style.borderRadius = '4px';
+                    kickButton.style.cursor = 'pointer';
+                    kickButton.style.marginLeft = '10px';
+                    
+                    kickButton.onclick = () => {
+                        if (confirm(`${peerUsername} kullanıcısını odadan atmak istediğinize emin misiniz?`)) {
+                            socket.emit('kick-user', peerId);
+                        }
+                    };
+                    
+                    peerDiv.appendChild(kickButton);
+                }
+         
+                remoteAudioContainer.appendChild(peerDiv);
+                remoteAudioElements[peerId] = { 
+                    div: peerDiv, 
+                    audio: remoteAudio, 
+                    username: peerUsername 
+                };
+                audioWrapper = remoteAudioElements[peerId];
+            }
+            audioWrapper.audio.srcObject = event.streams[0];
+        } else if (event.track.kind === 'video') {
+            let videoWrapper = remoteVideoElements[peerId];
+            const isScreenShare = event.track.label.toLowerCase().includes('screen') || 
+                                event.track.label.toLowerCase().includes('display');
+            
+            if (!videoWrapper || (videoWrapper.isScreenShare !== isScreenShare)) {
+                if (videoWrapper) {
+                    removeVideoElement(videoWrapper);
+                }
+                videoWrapper = createRemoteVideo(peerId, peerUsername, isScreenShare);
+                videoWrapper.isScreenShare = isScreenShare;
+                remoteVideoElements[peerId] = videoWrapper;
+            }
+            
+            const stream = event.streams[0];
+            videoWrapper.video.srcObject = stream;
+
+            // Track'in durumunu dinle
+            event.track.onended = () => {
+                console.log('Video track ended:', event.track.label);
+                if (remoteVideoElements[peerId] && !isScreenShare) {
+                    removeVideoElement(remoteVideoElements[peerId]);
+                    delete remoteVideoElements[peerId];
+                    reorganizeVideos();
+                }
+            };
+
+            // Stream'in durumunu dinle
+            stream.onremovetrack = () => {
+                console.log('Track removed from stream:', event.track.label);
+                if (stream.getVideoTracks().length === 0 && !isScreenShare) {
+                    if (remoteVideoElements[peerId]) {
+                        removeVideoElement(remoteVideoElements[peerId]);
+                        delete remoteVideoElements[peerId];
+                        reorganizeVideos();
+                    }
+                }
+            };
+        }
+    };
+}
+
+// Kamera işlevselliği için yeni fonksiyonlar
+async function startCamera() {
+    try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+            video: true,
+            audio: false 
+        });
+        
+        cameraButton.classList.add('hidden');
+        stopCameraButton.classList.remove('hidden');
+
+        // Kamera akışını tüm bağlantılara ekle
+        const peerIds = Object.keys(peerConnections);
+        console.log('Kamera başlatıldı, bağlantılara gönderiliyor. Bağlantı sayısı:', peerIds.length);
+
+        for (const peerId of peerIds) {
+            const pc = peerConnections[peerId];
+            if (pc && pc.signalingState !== 'closed') {
+                try {
+                    cameraStream.getTracks().forEach(track => {
+                        pc.addTrack(track, cameraStream);
+                    });
+                    console.log(`Kamera track'i ${peerId} bağlantısına eklendi`);
+                    await initiateOffer(peerId);
+                    console.log(`Offer ${peerId} bağlantısına gönderildi`);
+                } catch (error) {
+                    console.error(`${peerId} bağlantısına kamera eklenirken hata:`, error);
+                }
+            }
+        }
+
+        // Yerel kamera görüntüsünü göster
+        const localVideoWrapper = document.createElement('div');
+        localVideoWrapper.id = 'localVideoWrapper';
+        localVideoWrapper.className = 'video-wrapper loading';
+        
+        const localVideo = document.createElement('video');
+        localVideo.id = 'localVideo';
+        localVideo.autoplay = true;
+        localVideo.playsInline = true;
+        localVideo.muted = true;
+        localVideo.srcObject = cameraStream;
+        
+        const label = document.createElement('p');
+        label.textContent = 'Senin Kameran';
+        
+        localVideoWrapper.appendChild(localVideo);
+        localVideoWrapper.appendChild(label);
+        
+        const cameraContainer = document.getElementById('cameraVideoContainer');
+        cameraContainer.insertBefore(localVideoWrapper, cameraContainer.firstChild);
+        reorganizeVideos();
+
+        // Animasyon için timeout
+        setTimeout(() => {
+            localVideoWrapper.classList.remove('loading');
+        }, 100);
+
+    } catch (error) {
+        console.error('Kamera başlatılırken hata:', error);
+        alert('Kamera başlatılamadı: ' + error.message);
+        stopCamera();
+    }
+}
+
+function stopCamera() {
+    if (cameraStream) {
+        // Önce tüm track'leri durdur
+        cameraStream.getTracks().forEach(track => {
+            track.stop();
+        });
+
+        // Peer bağlantılarından kamera track'lerini kaldır ve yeni offer gönder
+        Object.entries(peerConnections).forEach(async ([peerId, pc]) => {
+            if (pc && pc.signalingState !== 'closed') {
+                const senders = pc.getSenders();
+                const videoSenders = senders.filter(sender => 
+                    sender.track && 
+                    sender.track.kind === 'video' && 
+                    !sender.track.label.toLowerCase().includes('screen')
+                );
+
+                // Video track'lerini kaldır
+                for (const sender of videoSenders) {
+                    try {
+                        pc.removeTrack(sender);
+                        console.log('Kamera track\'i peer bağlantısından kaldırıldı');
+                    } catch (error) {
+                        console.error('Track kaldırılırken hata:', error);
+                    }
+                }
+
+                // Track kaldırıldıktan sonra yeni offer gönder
+                if (videoSenders.length > 0) {
+                    try {
+                        await initiateOffer(peerId);
+                        console.log('Kamera kapatma sonrası yeni offer gönderildi:', peerId);
+                    } catch (error) {
+                        console.error('Offer gönderilirken hata:', error);
+                    }
+                }
+            }
+        });
+
+        // Diğer kullanıcılara kamera kapatma sinyali gönder
+        if (socket) {
+            socket.emit('camera-stopped', { userId: socket.id });
+            console.log('Kamera kapatma sinyali gönderildi');
+        }
+
+        cameraStream = null;
+
+        // Yerel video elementini kaldır
+        const localVideoWrapper = document.getElementById('localVideoWrapper');
+        if (localVideoWrapper) {
+            localVideoWrapper.classList.add('removing');
+            setTimeout(() => {
+                if (localVideoWrapper.parentNode) {
+                    localVideoWrapper.parentNode.removeChild(localVideoWrapper);
+                    reorganizeVideos();
+                }
+            }, 300);
+        }
+    }
+
+    cameraButton.classList.remove('hidden');
+    stopCameraButton.classList.add('hidden');
+}
+
+// Event listener'ları ekle
+cameraButton.addEventListener('click', startCamera);
+stopCameraButton.addEventListener('click', stopCamera);
+
+// Odadan çıkma fonksiyonu
+function leaveRoom() {
+    if (confirm('Odadan çıkmak istediğinize emin misiniz?')) {
+        // Tüm medya akışlarını durdur
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+
+        // Tüm peer bağlantılarını temizle
+        Object.keys(peerConnections).forEach(cleanupPeerConnection);
+
+        // Socket bağlantısını kapat
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+
+        // UI'ı sıfırla
+        appArea.classList.add('hidden');
+        joinArea.classList.remove('hidden');
+        startButton.textContent = 'Sesi Başlat';
+        startButton.disabled = true;
+        muteButton.classList.add('hidden');
+        cameraButton.classList.add('hidden');
+        screenShareButton.classList.add('hidden');
+        stopScreenShareButton.classList.add('hidden');
+        stopCameraButton.classList.add('hidden');
+        
+        // Input alanlarını temizle
+        usernameInput.value = '';
+        roomInput.value = '';
+        
+        // Sohbet alanını temizle
+        while (messages.firstChild) {
+            messages.removeChild(messages.firstChild);
+        }
+
+        // Global değişkenleri sıfırla
+        myUsername = '';
+        myRoom = '';
+    }
+}
+
+// Odadan çıkma butonu için event listener
+leaveRoomButton.addEventListener('click', leaveRoom);
+
+// Socket.io event listener'ını güncelle
+socket.on('peer-camera-stopped', (data) => {
+    const peerId = data.userId;
+    console.log('Peer kamera durdurma sinyali alındı:', peerId);
+    
+    // Video elementini bul ve kaldır
+    if (remoteVideoElements[peerId]) {
+        const videoElement = remoteVideoElements[peerId];
+        if (!videoElement.isScreenShare) {
+            console.log('Video elementi kaldırılıyor:', peerId);
+            
+            // Animasyonlu kaldırma
+            videoElement.div.classList.add('removing');
+            setTimeout(() => {
+                if (videoElement.div.parentNode) {
+                    videoElement.div.parentNode.removeChild(videoElement.div);
+                    delete remoteVideoElements[peerId];
+                    reorganizeVideos();
+                }
+            }, 300);
+        }
+    }
+});
+
+// Yapıştırma olayını dinle
+window.addEventListener('paste', async (e) => {
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        console.log('Pano içeriği okunuyor...');
+
+        for (const clipboardItem of clipboardItems) {
+            for (const type of clipboardItem.types) {
+                if (type.startsWith('image/')) {
+                    const blob = await clipboardItem.getType(type);
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        console.log('Resim başarıyla okundu');
+                        selectedImage = e.target.result;
+                        previewImage.src = selectedImage;
+                        imagePreview.classList.remove('hidden');
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        }
+    } catch (err) {
+        // Eğer yeni API desteklenmiyorsa, eski yöntemi dene
+        try {
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        console.log('Resim başarıyla okundu (eski yöntem)');
+                        selectedImage = e.target.result;
+                        previewImage.src = selectedImage;
+                        imagePreview.classList.remove('hidden');
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Resim yapıştırma hatası:', error);
+        }
+    }
+});
 
 // Ayrıca drop olayını da ekleyelim
 chatInput.addEventListener('drop', (e) => {
