@@ -88,249 +88,237 @@ initializeTheme();
 
 // --- Socket.IO Bağlantısı ve Olayları ---
 function connectToSignalingServer() {
-    console.log('connectToSignalingServer fonksiyonu çağrıldı');
-    console.log('Mevcut socket durumu:', socket);
-    console.log('Bağlanılacak sunucu:', signalingServerUrl);
-    console.log('Kullanıcı adı:', myUsername);
-    console.log('Oda:', myRoom);
-
-    if (!myUsername || !myRoom) {
-        console.error('Kullanıcı adı veya oda bilgisi eksik!');
+    if (socket) {
         return;
     }
+    socket = io(signalingServerUrl, {
+        query: { 
+            username: myUsername,
+            roomId: myRoom // Oda ID'sini query parametresi olarak ekle
+        },
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+    });
 
-    try {
-        socket = io(signalingServerUrl, {
-            query: { 
-                username: myUsername,
-                roomId: myRoom
-            },
-            transports: ['websocket', 'polling'],
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000
-        });
+    socket.on('connect', () => {
+        console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
+        setupChatListeners();
+    });
 
-        socket.on('connect', () => {
-            console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
-            setupChatListeners();
-        });
+    socket.on('connect_error', (error) => {
+        console.error('Bağlantı hatası:', error);
+        alert('Sunucuya bağlanırken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
+    });
 
-        socket.on('connect_error', (error) => {
-            console.error('Bağlantı hatası:', error);
-            alert('Sunucuya bağlanırken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
-        });
-
-        socket.on('existing-peers', (peersData) => {
-            console.log('--- existing-peers ALINDI ---');
-            console.log('Alınan peersData:', JSON.stringify(peersData, null, 2)); // Detaylı log
-            if (!Array.isArray(peersData)) {
-                console.error("HATA: existing-peers'ten gelen veri bir dizi değil!", peersData);
-                return;
+    socket.on('existing-peers', (peersData) => {
+        console.log('--- existing-peers ALINDI ---');
+        console.log('Alınan peersData:', JSON.stringify(peersData, null, 2)); // Detaylı log
+        if (!Array.isArray(peersData)) {
+            console.error("HATA: existing-peers'ten gelen veri bir dizi değil!", peersData);
+            return;
+        }
+        peersData.forEach(peer => {
+            console.log('İşlenen peer objesi:', JSON.stringify(peer, null, 2)); // Her bir peer'ı logla
+            if (!peer || typeof peer.id === 'undefined' || typeof peer.username === 'undefined') {
+                console.error("HATA: peer objesi beklenen formatta değil veya id/username eksik:", peer);
+                return; // Hatalı peer'ı atla
             }
-            peersData.forEach(peer => {
-                console.log('İşlenen peer objesi:', JSON.stringify(peer, null, 2)); // Her bir peer'ı logla
-                if (!peer || typeof peer.id === 'undefined' || typeof peer.username === 'undefined') {
-                    console.error("HATA: peer objesi beklenen formatta değil veya id/username eksik:", peer);
-                    return; // Hatalı peer'ı atla
-                }
-                if (peer.id === socket.id) return;
+            if (peer.id === socket.id) return;
 
-                if (!peerConnections[peer.id]) {
-                    console.log(`createPeerConnection çağrılacak: peer.id=${peer.id}, peer.username=${peer.username}`);
-                    const pc = createPeerConnection(peer.id, peer.username);
-                    peerConnections[peer.id] = pc;
-                } else {
-                    console.log(`${peer.id} için PeerConnection zaten var.`);
-                }
-                console.log(`${peer.id} idsThatNeedMyOffer'a ekleniyor.`);
-                idsThatNeedMyOffer.add(peer.id);
-            });
-            if (localStream && localStream.active) {
-                idsThatNeedMyOffer.forEach(peerId => initiateOffer(peerId));
-                idsThatNeedMyOffer.clear();
-            }
-        });
-
-        socket.on('peer-joined', (data) => { 
-            console.log('[İstemci] "peer-joined" olayı alındı. Gelen Ham Veri:', JSON.stringify(data)); 
-            
-            const { newPeerId, username } = data; 
-            if (newPeerId === socket.id) return; // Kendimiz için işlem yapma
-
-            console.log(`[İstemci] Yeni kullanıcı odaya katıldı: Alınan Username='${username}' (tip: ${typeof username}), ID='${newPeerId}'. Offer bekleniyor...`);
-            
-            let pc = peerConnections[newPeerId];
-            if (!pc) {
-                pc = createPeerConnection(newPeerId, username);
-                peerConnections[newPeerId] = pc;
-                console.log(`[İstemci] ${newPeerId} (${username || 'Bilinmeyen'}) için PeerConnection oluşturuldu (peer-joined).`);
+            if (!peerConnections[peer.id]) {
+                console.log(`createPeerConnection çağrılacak: peer.id=${peer.id}, peer.username=${peer.username}`);
+                const pc = createPeerConnection(peer.id, peer.username);
+                peerConnections[peer.id] = pc;
             } else {
-                console.log(`[İstemci] ${newPeerId} (${username || 'Bilinmeyen'}) için PeerConnection zaten mevcut (peer-joined).`);
+                console.log(`${peer.id} için PeerConnection zaten var.`);
             }
-
-            // Eğer aktif bir kamera akışımız varsa, yeni katılan kullanıcıya gönder
-            if (cameraStream && cameraStream.active) {
-                console.log('Mevcut kamera akışı yeni kullanıcıya gönderiliyor:', newPeerId);
-                cameraStream.getTracks().forEach(track => {
-                    try {
-                        pc.addTrack(track, cameraStream);
-                    } catch(e) {
-                        console.error('Kamera track\'i eklenirken hata:', e);
-                    }
-                });
-                // Yeni kullanıcıya offer gönder
-                initiateOffer(newPeerId);
-            }
-
-            // Eğer aktif bir ekran paylaşımı varsa, onu da gönder
-            if (screenStream && screenStream.active) {
-                console.log('Mevcut ekran paylaşımı yeni kullanıcıya gönderiliyor:', newPeerId);
-                screenStream.getTracks().forEach(track => {
-                    try {
-                        pc.addTrack(track, screenStream);
-                    } catch(e) {
-                        console.error('Ekran paylaşımı track\'i eklenirken hata:', e);
-                    }
-                });
-                // Yeni kullanıcıya offer gönder
-                initiateOffer(newPeerId);
-            }
+            console.log(`${peer.id} idsThatNeedMyOffer'a ekleniyor.`);
+            idsThatNeedMyOffer.add(peer.id);
         });
+        if (localStream && localStream.active) {
+            idsThatNeedMyOffer.forEach(peerId => initiateOffer(peerId));
+            idsThatNeedMyOffer.clear();
+        }
+    });
 
-        socket.on('room-full', () => {
-            alert('Sohbet odası dolu. Lütfen daha sonra tekrar deneyin.');
-            startButton.disabled = true;
-        });
+    socket.on('peer-joined', (data) => { 
+        console.log('[İstemci] "peer-joined" olayı alındı. Gelen Ham Veri:', JSON.stringify(data)); 
+        
+        const { newPeerId, username } = data; 
+        if (newPeerId === socket.id) return; // Kendimiz için işlem yapma
 
-        socket.on('offer', async (data) => {
-            const { sdp, fromId, fromUsername } = data; // fromUsername'i bekleyebiliriz
-            if (fromId === socket.id) return;
-            console.log(`Offer alındı: ${fromUsername || fromId} kullanıcısından`);
+        console.log(`[İstemci] Yeni kullanıcı odaya katıldı: Alınan Username='${username}' (tip: ${typeof username}), ID='${newPeerId}'. Offer bekleniyor...`);
+        
+        let pc = peerConnections[newPeerId];
+        if (!pc) {
+            pc = createPeerConnection(newPeerId, username);
+            peerConnections[newPeerId] = pc;
+            console.log(`[İstemci] ${newPeerId} (${username || 'Bilinmeyen'}) için PeerConnection oluşturuldu (peer-joined).`);
+        } else {
+            console.log(`[İstemci] ${newPeerId} (${username || 'Bilinmeyen'}) için PeerConnection zaten mevcut (peer-joined).`);
+        }
 
-            let pc = peerConnections[fromId];
-            if (!pc) {
-                console.log(`${fromId} için PeerConnection bulunamadı, yeni oluşturuluyor...`);
-                pc = createPeerConnection(fromId, fromUsername || 'Bilinmeyen Kullanıcı'); // Username'i ilet
-                peerConnections[fromId] = pc;
+        // Eğer aktif bir kamera akışımız varsa, yeni katılan kullanıcıya gönder
+        if (cameraStream && cameraStream.active) {
+            console.log('Mevcut kamera akışı yeni kullanıcıya gönderiliyor:', newPeerId);
+            cameraStream.getTracks().forEach(track => {
+                try {
+                    pc.addTrack(track, cameraStream);
+                } catch(e) {
+                    console.error('Kamera track\'i eklenirken hata:', e);
+                }
+            });
+            // Yeni kullanıcıya offer gönder
+            initiateOffer(newPeerId);
+        }
+
+        // Eğer aktif bir ekran paylaşımı varsa, onu da gönder
+        if (screenStream && screenStream.active) {
+            console.log('Mevcut ekran paylaşımı yeni kullanıcıya gönderiliyor:', newPeerId);
+            screenStream.getTracks().forEach(track => {
+                try {
+                    pc.addTrack(track, screenStream);
+                } catch(e) {
+                    console.error('Ekran paylaşımı track\'i eklenirken hata:', e);
+                }
+            });
+            // Yeni kullanıcıya offer gönder
+            initiateOffer(newPeerId);
+        }
+    });
+
+    socket.on('room-full', () => {
+        alert('Sohbet odası dolu. Lütfen daha sonra tekrar deneyin.');
+        startButton.disabled = true;
+    });
+
+    socket.on('offer', async (data) => {
+        const { sdp, fromId, fromUsername } = data; // fromUsername'i bekleyebiliriz
+        if (fromId === socket.id) return;
+        console.log(`Offer alındı: ${fromUsername || fromId} kullanıcısından`);
+
+        let pc = peerConnections[fromId];
+        if (!pc) {
+            console.log(`${fromId} için PeerConnection bulunamadı, yeni oluşturuluyor...`);
+            pc = createPeerConnection(fromId, fromUsername || 'Bilinmeyen Kullanıcı'); // Username'i ilet
+            peerConnections[fromId] = pc;
+        }
+
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            console.log(`Remote description (offer from ${fromUsername || fromId}) ayarlandı.`);
+            if (localStream && localStream.active) {
+                await sendAnswer(fromId);
+            } else {
+                console.warn(`Offer (${fromUsername || fromId} kullanıcısından) alındı ama yerel ses akışı hazır değil. "Sesi Başlat" bekleniyor.`);
+                idsThatNeedMyAnswer.add(fromId);
             }
+        } catch (error) {
+            console.error(`Offer (${fromUsername || fromId} kullanıcısından) işlenirken hata:`, error);
+        }
+    });
 
+    socket.on('answer', async (data) => {
+        const { sdp, fromId } = data;
+        if (fromId === socket.id) return;
+        console.log(`Answer alındı: ${fromId} kullanıcısından`);
+        const pc = peerConnections[fromId];
+        if (pc) {
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-                console.log(`Remote description (offer from ${fromUsername || fromId}) ayarlandı.`);
-                if (localStream && localStream.active) {
-                    await sendAnswer(fromId);
-                } else {
-                    console.warn(`Offer (${fromUsername || fromId} kullanıcısından) alındı ama yerel ses akışı hazır değil. "Sesi Başlat" bekleniyor.`);
-                    idsThatNeedMyAnswer.add(fromId);
-                }
+                console.log(`Remote description (answer from ${fromId}) ayarlandı.`);
             } catch (error) {
-                console.error(`Offer (${fromUsername || fromId} kullanıcısından) işlenirken hata:`, error);
+                console.error(`Answer (${fromId} kullanıcısından) işlenirken hata:`, error);
             }
-        });
+        } else {
+            console.warn(`Answer (${fromId} kullanıcısından) alındı ama PeerConnection bulunamadı.`);
+        }
+    });
 
-        socket.on('answer', async (data) => {
-            const { sdp, fromId } = data;
-            if (fromId === socket.id) return;
-            console.log(`Answer alındı: ${fromId} kullanıcısından`);
-            const pc = peerConnections[fromId];
-            if (pc) {
-                try {
-                    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-                    console.log(`Remote description (answer from ${fromId}) ayarlandı.`);
-                } catch (error) {
-                    console.error(`Answer (${fromId} kullanıcısından) işlenirken hata:`, error);
-                }
-            } else {
-                console.warn(`Answer (${fromId} kullanıcısından) alındı ama PeerConnection bulunamadı.`);
+    socket.on('ice-candidate', async (data) => {
+        const { candidate, fromId } = data;
+        if (fromId === socket.id) return;
+        // console.log(`ICE adayı alındı: ${fromId} kullanıcısından`); // Çok fazla log üretebilir
+        const pc = peerConnections[fromId];
+        if (pc && candidate) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                // console.log(`ICE adayı (${fromId} kullanıcısından) eklendi.`);
+            } catch (error) {
+                console.error(`ICE adayı (${fromId} kullanıcısından) eklenirken hata:`, error);
             }
-        });
+        }
+    });
 
-        socket.on('ice-candidate', async (data) => {
-            const { candidate, fromId } = data;
-            if (fromId === socket.id) return;
-            // console.log(`ICE adayı alındı: ${fromId} kullanıcısından`); // Çok fazla log üretebilir
-            const pc = peerConnections[fromId];
-            if (pc && candidate) {
-                try {
-                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-                    // console.log(`ICE adayı (${fromId} kullanıcısından) eklendi.`);
-                } catch (error) {
-                    console.error(`ICE adayı (${fromId} kullanıcısından) eklenirken hata:`, error);
-                }
-            }
-        });
+    socket.on('peer-left', (peerId) => { // Sunucu sadece ID gönderiyorsa, username'i remoteAudioElements'ten bulabiliriz
+        const username = remoteAudioElements[peerId]?.username || peerId;
+        if (peerId === socket.id) return;
+        console.log(`Kullanıcı ayrıldı: ${username}`);
+        cleanupPeerConnection(peerId);
+    });
 
-        socket.on('peer-left', (peerId) => { // Sunucu sadece ID gönderiyorsa, username'i remoteAudioElements'ten bulabiliriz
-            const username = remoteAudioElements[peerId]?.username || peerId;
-            if (peerId === socket.id) return;
-            console.log(`Kullanıcı ayrıldı: ${username}`);
-            cleanupPeerConnection(peerId);
-        });
+    socket.on('disconnect', () => {
+        console.log('Sinyalleşme sunucusuyla bağlantı kesildi.');
+        // Tüm bağlantıları temizleyebiliriz veya yeniden bağlanmayı deneyebiliriz.
+        // Şimdilik basit tutalım, kullanıcı sayfayı yenileyebilir.
+        Object.keys(peerConnections).forEach(cleanupPeerConnection);
+        startButton.textContent = 'Sesi Başlat';
+        startButton.disabled = true; // Yeniden bağlanana kadar
+        alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
+    });
 
-        socket.on('disconnect', () => {
-            console.log('Sinyalleşme sunucusuyla bağlantı kesildi.');
-            // Tüm bağlantıları temizleyebiliriz veya yeniden bağlanmayı deneyebiliriz.
-            // Şimdilik basit tutalım, kullanıcı sayfayı yenileyebilir.
-            Object.keys(peerConnections).forEach(cleanupPeerConnection);
-            startButton.textContent = 'Sesi Başlat';
-            startButton.disabled = true; // Yeniden bağlanana kadar
-            alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
-        });
+    socket.on('host-status', (data) => {
+        isHost = data.isHost;
+        if (isHost) {
+            console.log('Bu odanın hostu sensin!');
+            // Host olduğunu kullanıcıya bildir
+            const hostBadge = document.createElement('span');
+            hostBadge.textContent = ' (Host)';
+            hostBadge.style.color = '#28a745';
+            hostBadge.style.fontWeight = 'bold';
+            displayUsername.appendChild(hostBadge);
+        }
+    });
 
-        socket.on('host-status', (data) => {
-            isHost = data.isHost;
-            if (isHost) {
-                console.log('Bu odanın hostu sensin!');
-                // Host olduğunu kullanıcıya bildir
-                const hostBadge = document.createElement('span');
-                hostBadge.textContent = ' (Host)';
-                hostBadge.style.color = '#28a745';
-                hostBadge.style.fontWeight = 'bold';
-                displayUsername.appendChild(hostBadge);
-            }
-        });
+    socket.on('new-host', (data) => {
+        isHost = socket.id === data.hostId;
+        // Eski host badge'ini temizle
+        const existingBadge = displayUsername.querySelector('span');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+        
+        if (isHost) {
+            console.log('Yeni host sensin!');
+            const hostBadge = document.createElement('span');
+            hostBadge.textContent = ' (Host)';
+            hostBadge.style.color = '#28a745';
+            hostBadge.style.fontWeight = 'bold';
+            displayUsername.appendChild(hostBadge);
+        }
+        
+        // Bilgilendirme mesajı
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', 'system-message');
+        messageElement.textContent = `${data.hostUsername} yeni host oldu.`;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+    });
 
-        socket.on('new-host', (data) => {
-            isHost = socket.id === data.hostId;
-            // Eski host badge'ini temizle
-            const existingBadge = displayUsername.querySelector('span');
-            if (existingBadge) {
-                existingBadge.remove();
-            }
-            
-            if (isHost) {
-                console.log('Yeni host sensin!');
-                const hostBadge = document.createElement('span');
-                hostBadge.textContent = ' (Host)';
-                hostBadge.style.color = '#28a745';
-                hostBadge.style.fontWeight = 'bold';
-                displayUsername.appendChild(hostBadge);
-            }
-            
-            // Bilgilendirme mesajı
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message', 'system-message');
-            messageElement.textContent = `${data.hostUsername} yeni host oldu.`;
-            messages.appendChild(messageElement);
-            messages.scrollTop = messages.scrollHeight;
-        });
+    socket.on('kicked-from-room', () => {
+        alert('Host tarafından odadan atıldınız!');
+        leaveRoom(); // Odadan çık
+    });
 
-        socket.on('kicked-from-room', () => {
-            alert('Host tarafından odadan atıldınız!');
-            leaveRoom(); // Odadan çık
-        });
-
-        socket.on('user-kicked', (data) => {
-            // Bilgilendirme mesajı
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message', 'system-message');
-            messageElement.textContent = `${data.kickedUsername} host tarafından odadan atıldı.`;
-            messages.appendChild(messageElement);
-            messages.scrollTop = messages.scrollHeight;
-        });
-    } catch (error) {
-        console.error('Socket bağlantısı oluşturulurken hata:', error);
-    }
+    socket.on('user-kicked', (data) => {
+        // Bilgilendirme mesajı
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', 'system-message');
+        messageElement.textContent = `${data.kickedUsername} host tarafından odadan atıldı.`;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+    });
 }
 
 // --- WebRTC Fonksiyonları ---
@@ -604,6 +592,7 @@ async function initializeApp() {
     }
 }
 
+
 // --- Sohbet işlemleri ---
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
@@ -614,11 +603,6 @@ const chatToggle = document.getElementById('chat-toggle');
 const imagePreview = document.getElementById('image-preview');
 const previewImage = document.getElementById('preview-image');
 const cancelImage = document.getElementById('cancel-image');
-const fileInput = document.getElementById('file-input');
-const uploadButton = document.getElementById('upload-button');
-const imageModal = document.getElementById('image-modal');
-const modalImage = document.getElementById('modal-image');
-const modalClose = document.getElementById('modal-close');
 
 // Sohbet durumu
 let isChatVisible = true;
@@ -630,41 +614,25 @@ function makeLinksClickable(text) {
     return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
-// Panodan resim yapıştırma olayı
+// Resim yapıştırma olayını dinle
 chatInput.addEventListener('paste', (e) => {
     const items = e.clipboardData.items;
+    
     for (const item of items) {
         if (item.type.startsWith('image/')) {
             e.preventDefault();
             const file = item.getAsFile();
             const reader = new FileReader();
+            
             reader.onload = (e) => {
                 selectedImage = e.target.result;
                 previewImage.src = selectedImage;
                 imagePreview.classList.remove('hidden');
             };
+            
             reader.readAsDataURL(file);
             break;
         }
-    }
-});
-
-// Resim yükleme butonu tıklama olayı
-uploadButton.addEventListener('click', () => {
-    fileInput.click();
-});
-
-// Dosya seçildiğinde
-fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            selectedImage = e.target.result;
-            previewImage.src = selectedImage;
-            imagePreview.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
     }
 });
 
@@ -673,92 +641,43 @@ cancelImage.addEventListener('click', () => {
     selectedImage = null;
     imagePreview.classList.add('hidden');
     previewImage.src = '';
-    fileInput.value = '';
-});
-
-// Resim tıklama olayı
-document.addEventListener('click', (e) => {
-    if (e.target.tagName === 'IMG' && e.target.closest('.message')) {
-        const imgSrc = e.target.src;
-        modalImage.src = imgSrc;
-        imageModal.classList.add('active');
-    }
-});
-
-// Modal kapatma
-modalClose.addEventListener('click', () => {
-    imageModal.classList.remove('active');
-});
-
-// Modal dışına tıklama
-imageModal.addEventListener('click', (e) => {
-    if (e.target === imageModal) {
-        imageModal.classList.remove('active');
-    }
-});
-
-// ESC tuşu ile modal kapatma
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && imageModal.classList.contains('active')) {
-        imageModal.classList.remove('active');
-    }
 });
 
 // Mesaj gönderme
-function sendMessage(e) {
+chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    
-    if (!socket || !socket.connected) {
-        console.error('Socket bağlantısı yok veya bağlı değil!');
-        // Yeniden bağlanmayı dene
-        connectToSignalingServer();
-        alert('Sunucu bağlantısı kopmuş. Yeniden bağlanmayı deniyorum...');
-        return;
-    }
-
-    const messageText = chatInput.value.trim();
-    
-    if (messageText || selectedImage) {
-        try {
-            // Mesajı gönder
-            socket.emit('chat message', {
-                text: messageText,
-                sender: myUsername || 'Misafir',
-                type: 'message',
-                image: selectedImage
-            });
-            
-            // Kendi mesajımızı hemen göster
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message', 'my-message');
-            
-            let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
-            if (messageText) {
-                messageContent += makeLinksClickable(messageText);
-            }
-            if (selectedImage) {
-                messageContent += `<br><img src="${selectedImage}" alt="Gönderilen resim">`;
-            }
-            
-            messageElement.innerHTML = messageContent;
-            messages.appendChild(messageElement);
-            messages.scrollTop = messages.scrollHeight;
-            
-            // Formu temizle
-            chatInput.value = '';
-            selectedImage = null;
-            imagePreview.classList.add('hidden');
-            previewImage.src = '';
-            fileInput.value = '';
-        } catch (error) {
-            console.error('Mesaj gönderirken hata:', error);
-            alert('Mesaj gönderilemedi. Lütfen tekrar deneyin.');
+    if ((chatInput.value || selectedImage) && socket) {
+        // Mesajı gönder
+        socket.emit('chat message', {
+            text: chatInput.value,
+            sender: myUsername || 'Misafir',
+            type: 'message',
+            image: selectedImage
+        });
+        
+        // Kendi mesajımızı hemen göster
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', 'my-message');
+        
+        let messageContent = `<strong>${myUsername || 'Misafir'}:</strong> `;
+        if (chatInput.value) {
+            messageContent += makeLinksClickable(chatInput.value);
         }
+        if (selectedImage) {
+            messageContent += `<br><img src="${selectedImage}" alt="Gönderilen resim">`;
+        }
+        
+        messageElement.innerHTML = messageContent;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+        
+        // Formu temizle
+        chatInput.value = '';
+        selectedImage = null;
+        imagePreview.classList.add('hidden');
+        previewImage.src = '';
     }
-}
-
-// Form submit olayını dinle
-chatForm.addEventListener('submit', sendMessage);
+});
 
 // Sohbeti aç/kapat
 function toggleChat() {
@@ -798,10 +717,7 @@ clearChatButton.addEventListener('click', clearChat);
 
 // Socket.IO mesaj dinleyicileri
 function setupChatListeners() {
-    if (!socket) {
-        console.error('Socket bağlantısı yok!');
-        return;
-    }
+    if (!socket) return;
     
     // Önceki mesajları göster
     socket.on('previous-messages', (messages) => {
@@ -826,10 +742,7 @@ function setupChatListeners() {
         messages.scrollTop = messages.scrollHeight;
     });
     
-    // Yeni mesaj geldiğinde
     socket.on('chat message', (msg) => {
-        console.log('Mesaj alındı:', msg); // Debug için log
-        
         if (msg.sender === myUsername && msg.type !== 'system') return;
         
         const messageElement = document.createElement('div');
@@ -861,6 +774,11 @@ function setupChatListeners() {
         }
     });
 }
+
+// ... existing code ...
+
+// Temizleme butonu için event listener
+clearChatButton.addEventListener('click', clearChat);
 
 // Ayrıca drop olayını da ekleyelim
 chatInput.addEventListener('drop', (e) => {
