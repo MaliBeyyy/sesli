@@ -313,7 +313,7 @@
 
         #chat-toggle {
             position: fixed;
-            bottom: 90px;
+            bottom: 20px;
             right: 20px;
             width: 50px;
             height: 50px;
@@ -337,7 +337,7 @@
 
         #chat-container {
             position: fixed;
-            bottom: 90px;
+            bottom: 20px;
             right: 20px;
             width: 300px;
             height: 400px;
@@ -849,75 +849,6 @@
             transform: scale(1.1);
         }
 
-        .image-upload-label {
-            cursor: pointer;
-            padding: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--button-bg);
-            transition: all 0.2s;
-        }
-
-        .image-upload-label:hover {
-            color: var(--button-hover);
-            transform: scale(1.1);
-        }
-
-        .image-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .image-modal.active {
-            display: flex;
-        }
-
-        .image-modal img {
-            max-width: 90%;
-            max-height: 90vh;
-            object-fit: contain;
-            border-radius: 8px;
-        }
-
-        .image-modal-close {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            color: white;
-            background: none;
-            border: none;
-            font-size: 30px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .image-modal-close:hover {
-            transform: scale(1.1);
-        }
-
-        /* Mobil cihazlar için düzenleme */
-        @media (max-width: 768px) {
-            #chat-toggle {
-                bottom: 100px;
-            }
-            
-            #chat-container {
-                bottom: 100px;
-                width: 90%;
-                right: 5%;
-                left: 5%;
-            }
-        }
-
     </style>
 </head>
 <body>
@@ -926,12 +857,6 @@
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
     </button>
-
-    <!-- Resim büyütme modalı -->
-    <div id="imageModal" class="image-modal">
-        <img id="modalImage" src="" alt="Büyük Görüntü">
-        <button id="modalClose" class="image-modal-close">×</button>
-    </div>
 
     <img src="logo.png" alt="Uygulama Logosu" style="width: 120px; display: block; margin-bottom: 20px;">
 
@@ -1003,12 +928,12 @@
         <div id="messages"></div>
         <div id="image-preview" class="hidden">
             <img id="preview-image" src="" alt="Önizleme">
-            <button id="cancel-image">×</button>
+            <button id="cancel-image" title="Resmi İptal Et">×</button>
         </div>
         <form id="chat-form">
             <div class="chat-input-container">
-                <input id="chat-input" type="text" placeholder="Mesajınızı yazın veya bir resim yapıştırın (Ctrl+V)..." autocomplete="off">
-                <label for="image-upload" class="image-upload-label" title="Resim Seç">
+                <input id="chat-input" type="text" placeholder="Mesajınızı yazın..." autocomplete="off">
+                <label for="image-upload" class="image-upload-label" title="Resim Yükle">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                         <circle cx="12" cy="13" r="4"/>

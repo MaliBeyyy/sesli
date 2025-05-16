@@ -614,30 +614,6 @@ function makeLinksClickable(text) {
     return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
-// Resim yükleme ve önizleme için gerekli elementler
-const imageUpload = document.getElementById('image-upload');
-const imagePreview = document.getElementById('image-preview');
-const previewImage = document.getElementById('preview-image');
-const cancelImage = document.getElementById('cancel-image');
-const imageModal = document.getElementById('imageModal');
-const modalImage = document.getElementById('modalImage');
-const modalClose = document.getElementById('modalClose');
-let selectedImage = null;
-
-// Resim seçildiğinde
-imageUpload.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            selectedImage = e.target.result;
-            previewImage.src = selectedImage;
-            imagePreview.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
-    }
-});
-
 // Resim yapıştırma olayını dinle
 chatInput.addEventListener('paste', (e) => {
     const items = e.clipboardData.items;
@@ -665,24 +641,7 @@ cancelImage.addEventListener('click', () => {
     selectedImage = null;
     imagePreview.classList.add('hidden');
     previewImage.src = '';
-    imageUpload.value = '';
 });
-
-// Modal kapatma
-modalClose.addEventListener('click', () => {
-    imageModal.classList.remove('active');
-});
-
-// Resme tıklandığında büyük görüntüleme
-function setupImageClickHandler(messageElement) {
-    const image = messageElement.querySelector('img');
-    if (image) {
-        image.addEventListener('click', () => {
-            modalImage.src = image.src;
-            imageModal.classList.add('active');
-        });
-    }
-}
 
 // Mesaj gönderme
 chatForm.addEventListener('submit', (e) => {
@@ -712,15 +671,11 @@ chatForm.addEventListener('submit', (e) => {
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
         
-        // Resme tıklama olayını ekle
-        setupImageClickHandler(messageElement);
-        
         // Formu temizle
         chatInput.value = '';
         selectedImage = null;
         imagePreview.classList.add('hidden');
         previewImage.src = '';
-        imageUpload.value = '';
     }
 });
 
@@ -783,9 +738,6 @@ function setupChatListeners() {
             }
             messageElement.innerHTML = messageContent;
             messages.appendChild(messageElement);
-            
-            // Resme tıklama olayını ekle
-            setupImageClickHandler(messageElement);
         });
         messages.scrollTop = messages.scrollHeight;
     });
@@ -808,9 +760,6 @@ function setupChatListeners() {
                 messageContent += `<br><img src="${msg.image}" alt="Alınan resim">`;
             }
             messageElement.innerHTML = messageContent;
-            
-            // Resme tıklama olayını ekle
-            setupImageClickHandler(messageElement);
         }
         
         messages.appendChild(messageElement);
