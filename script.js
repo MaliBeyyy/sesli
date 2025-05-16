@@ -43,11 +43,56 @@ let idsThatNeedMyAnswer = new Set(); // Bize offer gönderen ama henüz cevaplay
 
 console.log('Bağlanılacak sunucu:', signalingServerUrl);
 
-// Tema yönetimi için değişkenler
-const themeToggle = document.createElement('button');
-themeToggle.id = 'theme-toggle';
-themeToggle.innerHTML = '🌙'; // Başlangıç ikonu
-themeToggle.title = 'Temayı Değiştir';
+// Tema ve sohbet elementlerini tanımla
+let themeToggle, chatToggle, chatContainer, messages, chatForm, chatInput, clearChatButton;
+
+// DOM yüklendikten sonra çalışacak ana fonksiyon
+function initializeUIElements() {
+    // Tema butonunu oluştur
+    themeToggle = document.createElement('button');
+    themeToggle.id = 'theme-toggle';
+    themeToggle.title = 'Temayı Değiştir';
+    themeToggle.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+    // Chat elementlerini seç
+    chatToggle = document.getElementById('chat-toggle');
+    chatContainer = document.getElementById('chat-container');
+    messages = document.getElementById('messages');
+    chatForm = document.getElementById('chat-form');
+    chatInput = document.getElementById('chat-input');
+    clearChatButton = document.getElementById('clear-chat');
+
+    // Chat header'a tema butonunu ekle
+    const chatHeader = document.querySelector('.chat-header');
+    if (chatHeader) {
+        chatHeader.appendChild(themeToggle);
+    }
+
+    // Event listener'ları ekle
+    setupEventListeners();
+
+    // Tema ayarlarını başlat
+    initializeTheme();
+}
+
+// Event listener'ları ayarla
+function setupEventListeners() {
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+
+    if (chatToggle) {
+        chatToggle.addEventListener('click', toggleChat);
+    }
+
+    if (clearChatButton) {
+        clearChatButton.addEventListener('click', clearChat);
+    }
+
+    if (chatForm) {
+        chatForm.addEventListener('submit', handleChatSubmit);
+    }
+}
 
 // Tema durumu
 let isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -55,41 +100,142 @@ let isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
 // Tema değiştirme fonksiyonu
 function toggleTheme() {
     isDarkMode = !isDarkMode;
+    applyTheme();
+}
+
+// Temayı uygula
+function applyTheme() {
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-    themeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
+    if (themeToggle) {
+        themeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
+    }
     localStorage.setItem('chatTheme', isDarkMode ? 'dark' : 'light');
 }
 
-// Sistem teması değişikliğini dinle
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    if (localStorage.getItem('chatTheme') === null) { // Kullanıcı manuel tema seçmediyse
-        isDarkMode = e.matches;
-        document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-        themeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
-    }
-});
-
-// Sayfa yüklendiğinde tema ayarını kontrol et
+// Tema ayarlarını başlat
 function initializeTheme() {
     const savedTheme = localStorage.getItem('chatTheme');
     if (savedTheme) {
         isDarkMode = savedTheme === 'dark';
     }
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-    themeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
+    applyTheme();
+
+    // Sistem teması değişikliğini dinle
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (localStorage.getItem('chatTheme') === null) {
+            isDarkMode = e.matches;
+            applyTheme();
+        }
+    });
 }
 
-// Tema değiştirme butonu için event listener
-themeToggle.addEventListener('click', toggleTheme);
+// Sohbet durumu
+let isChatVisible = true;
 
-// Tema başlatma
-document.addEventListener('DOMContentLoaded', () => {
-    const chatHeader = document.querySelector('.chat-header');
-    if (chatHeader) {
-        chatHeader.appendChild(themeToggle);
-        initializeTheme();
+// Sohbeti aç/kapat
+function toggleChat() {
+    if (!chatContainer || !chatToggle) return;
+
+    isChatVisible = !isChatVisible;
+    chatContainer.classList.toggle('hidden', !isChatVisible);
+    
+    chatToggle.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/>
+    </svg>`;
+    
+    if (!isChatVisible) {
+        chatToggle.style.transform = 'scale(1)';
     }
-});
+}
+
+// Sohbeti temizle
+function clearChat() {
+    if (!messages) return;
+
+    if (confirm('Tüm sohbet geçmişini silmek istediğinize emin misiniz?')) {
+        while (messages.firstChild) {
+            messages.removeChild(messages.firstChild);
+        }
+        if (socket) {
+            socket.emit('chat message', {
+                text: '--- Sohbet geçmişini temizledi ---',
+                sender: myUsername || 'Misafir',
+                type: 'system'
+            });
+        }
+    }
+}
+
+// Yeni mesaj geldiğinde butonu vurgula
+function highlightChatButton() {
+    if (!chatToggle || isChatVisible) return;
+
+    chatToggle.style.transform = 'scale(1.1)';
+    setTimeout(() => {
+        chatToggle.style.transform = 'scale(1)';
+    }, 200);
+}
+
+// Link dönüştürme
+function linkify(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, url => 
+        `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+    );
+}
+
+// Chat form submit
+function handleChatSubmit(e) {
+    e.preventDefault();
+    if (!socket || !chatInput || !messages) return;
+
+    const messageText = chatInput.value.trim();
+    if (!messageText) return;
+
+    socket.emit('chat message', {
+        text: messageText,
+        sender: myUsername || 'Misafir',
+        type: 'message'
+    });
+    
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message', 'my-message');
+    messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${linkify(messageText)}`;
+    messages.appendChild(messageElement);
+    messages.scrollTop = messages.scrollHeight;
+    
+    chatInput.value = '';
+}
+
+// Sayfa yüklendiğinde başlat
+document.addEventListener('DOMContentLoaded', initializeUIElements);
+
+// Socket.IO mesaj olaylarını dinle
+function setupChatListeners() {
+    if (!socket || !messages) return;
+    
+    socket.on('chat message', (msg) => {
+        if (msg.sender === myUsername && msg.type !== 'system') return;
+        
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message');
+        
+        if (msg.type === 'system') {
+            messageElement.classList.add('system-message');
+            messageElement.textContent = `${msg.sender} ${msg.text}`;
+        } else {
+            messageElement.classList.add('other-message');
+            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${linkify(msg.text)}`;
+        }
+        
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+        
+        if (!isChatVisible) {
+            highlightChatButton();
+        }
+    });
+}
 
 // Sunucu durumunu kontrol et
 async function checkServerStatus() {
@@ -632,139 +778,6 @@ async function initializeApp() {
         appArea.classList.add('hidden');
     }
 }
-
-
-// --- Sohbet işlemleri ---
-const chatForm = document.getElementById('chat-form');
-const chatInput = document.getElementById('chat-input');
-const messages = document.getElementById('messages');
-const clearChatButton = document.getElementById('clear-chat');
-const chatContainer = document.getElementById('chat-container');
-const chatToggle = document.getElementById('chat-toggle');
-
-// Sohbet durumu
-let isChatVisible = true;
-
-// Sohbeti aç/kapat fonksiyonu
-function toggleChat() {
-    isChatVisible = !isChatVisible;
-    chatContainer.classList.toggle('hidden', !isChatVisible);
-    
-    // Toggle butonunun ikonunu değiştir
-    chatToggle.innerHTML = isChatVisible 
-        ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>'
-        : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z"/></svg>';
-    
-    // Sohbet kapalıyken yeni mesaj gelirse butonu vurgula
-    if (!isChatVisible) {
-        chatToggle.style.transform = 'scale(1)';
-    }
-}
-
-// Yeni mesaj geldiğinde butonu vurgula
-function highlightChatButton() {
-    if (!isChatVisible) {
-        chatToggle.style.transform = 'scale(1.1)';
-        setTimeout(() => {
-            chatToggle.style.transform = 'scale(1)';
-        }, 200);
-    }
-}
-
-// Toggle butonu için event listener
-document.addEventListener('DOMContentLoaded', () => {
-    if (chatToggle) {
-        chatToggle.addEventListener('click', toggleChat);
-    }
-    if (clearChatButton) {
-        clearChatButton.addEventListener('click', clearChat);
-    }
-    if (chatForm) {
-        chatForm.addEventListener('submit', handleChatSubmit);
-    }
-});
-
-// Sohbeti temizleme fonksiyonu
-function clearChat() {
-    if (confirm('Tüm sohbet geçmişini silmek istediğinize emin misiniz?')) {
-        while (messages.firstChild) {
-            messages.removeChild(messages.firstChild);
-        }
-        // Temizleme işlemini diğer kullanıcılara bildir
-        if (socket) {
-            socket.emit('chat message', {
-                text: '--- Sohbet geçmişini temizledi ---',
-                sender: myUsername || 'Misafir',
-                type: 'system'
-            });
-        }
-    }
-}
-
-// Link dönüştürme fonksiyonu
-function linkify(text) {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, function(url) {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-    });
-}
-
-// Chat form submit handler
-function handleChatSubmit(e) {
-    e.preventDefault();
-    if (socket && chatInput.value.trim()) {
-        console.log('Mesaj gönderiliyor:', chatInput.value);
-        // Mesajı gönder
-        socket.emit('chat message', {
-            text: chatInput.value,
-            sender: myUsername || 'Misafir',
-            type: 'message'
-        });
-        
-        // Kendi mesajımızı hemen göster
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message', 'my-message');
-        messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${linkify(chatInput.value)}`;
-        messages.appendChild(messageElement);
-        messages.scrollTop = messages.scrollHeight;
-        
-        chatInput.value = '';
-    } else {
-        console.warn('Mesaj gönderilemedi: Socket bağlantısı yok veya mesaj boş');
-    }
-}
-
-// Socket.IO mesaj olaylarını dinle
-function setupChatListeners() {
-    if (!socket) return;
-    
-    socket.on('chat message', (msg) => {
-        console.log('Mesaj alındı:', msg);
-        // Kendi mesajlarımızı tekrar gösterme (zaten gösterildi)
-        if (msg.sender === myUsername && msg.type !== 'system') return;
-        
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message');
-        
-        if (msg.type === 'system') {
-            messageElement.classList.add('system-message');
-            messageElement.textContent = `${msg.sender} ${msg.text}`;
-        } else {
-            messageElement.classList.add('other-message');
-            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${linkify(msg.text)}`;
-        }
-        
-        messages.appendChild(messageElement);
-        messages.scrollTop = messages.scrollHeight;
-        
-        // Sohbet kapalıysa butonu vurgula
-        if (!isChatVisible) {
-            highlightChatButton();
-        }
-    });
-}
-
-console.log("Script yüklendi. Kullanıcı adı bekleniyor...");
 
 // Ekran paylaşımı fonksiyonları
 async function startScreenShare() {
