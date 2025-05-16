@@ -769,11 +769,21 @@ function createRemoteVideo(peerId, peerUsername, isScreenShare = false) {
     return { div: videoWrapper, video: video };
 }
 
+// Video elementini kaldırma fonksiyonu
+function removeVideoElement(videoWrapper) {
+    if (videoWrapper && videoWrapper.div) {
+        videoWrapper.div.classList.add('removing');
+        setTimeout(() => {
+            if (videoWrapper.div.parentNode) {
+                videoWrapper.div.parentNode.removeChild(videoWrapper.div);
+            }
+        }, 300);
+    }
+}
+
 // PeerConnection track handler'ını güncelle
 function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
     pc.ontrack = (event) => {
-        console.log(`Uzak medya akışı alındı: ${peerUsername} (${peerId}) kullanıcısından`);
-        
         if (event.track.kind === 'audio') {
             let audioWrapper = remoteAudioElements[peerId];
             if (!audioWrapper) {
@@ -834,13 +844,21 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
             
             if (!videoWrapper || (videoWrapper.isScreenShare !== isScreenShare)) {
                 if (videoWrapper) {
-                    videoWrapper.div.remove();
+                    removeVideoElement(videoWrapper);
                 }
                 videoWrapper = createRemoteVideo(peerId, peerUsername, isScreenShare);
                 videoWrapper.isScreenShare = isScreenShare;
                 remoteVideoElements[peerId] = videoWrapper;
             }
             videoWrapper.video.srcObject = event.streams[0];
+
+            // Track'in durumunu dinle
+            event.track.onended = () => {
+                if (remoteVideoElements[peerId]) {
+                    removeVideoElement(remoteVideoElements[peerId]);
+                    delete remoteVideoElements[peerId];
+                }
+            };
         }
     };
 }
@@ -917,168 +935,11 @@ function stopCamera() {
 
         const localVideoWrapper = document.getElementById('localVideoWrapper');
         if (localVideoWrapper) {
-            localVideoWrapper.classList.add('loading');
+            localVideoWrapper.classList.add('removing');
             setTimeout(() => {
-                localVideoWrapper.remove();
-            }, 300);
-        }
-    }
-
-    cameraButton.classList.remove('hidden');
-    stopCameraButton.classList.add('hidden');
-}
-
-// PeerConnection track handler'ını güncelle
-function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
-    pc.ontrack = (event) => {
-        console.log(`Uzak medya akışı alındı: ${peerUsername} (${peerId}) kullanıcısından`);
-        
-        if (event.track.kind === 'audio') {
-            let audioWrapper = remoteAudioElements[peerId];
-            if (!audioWrapper) {
-                const peerDiv = document.createElement('div');
-                peerDiv.id = `remoteAudioDiv-${peerId}`;
-                peerDiv.style.marginBottom = '10px';
-                peerDiv.style.display = 'flex';
-                peerDiv.style.justifyContent = 'space-between';
-                peerDiv.style.alignItems = 'center';
-
-                const leftDiv = document.createElement('div');
-                leftDiv.style.flex = '1';
-
-                const label = document.createElement('p');
-                label.textContent = `${peerUsername} (${peerId.substring(0, 6)}...):`;
-                
-                const remoteAudio = document.createElement('audio');
-                remoteAudio.autoplay = true;
-                remoteAudio.controls = true;
-                
-                leftDiv.appendChild(label);
-                leftDiv.appendChild(remoteAudio);
-                peerDiv.appendChild(leftDiv);
-
-                if (isHost && socket.id !== peerId) {
-                    const kickButton = document.createElement('button');
-                    kickButton.textContent = 'Odadan At';
-                    kickButton.style.backgroundColor = '#dc3545';
-                    kickButton.style.color = 'white';
-                    kickButton.style.border = 'none';
-                    kickButton.style.padding = '5px 10px';
-                    kickButton.style.borderRadius = '4px';
-                    kickButton.style.cursor = 'pointer';
-                    kickButton.style.marginLeft = '10px';
-                    
-                    kickButton.onclick = () => {
-                        if (confirm(`${peerUsername} kullanıcısını odadan atmak istediğinize emin misiniz?`)) {
-                            socket.emit('kick-user', peerId);
-                        }
-                    };
-                    
-                    peerDiv.appendChild(kickButton);
+                if (localVideoWrapper.parentNode) {
+                    localVideoWrapper.parentNode.removeChild(localVideoWrapper);
                 }
-         
-                remoteAudioContainer.appendChild(peerDiv);
-                remoteAudioElements[peerId] = { 
-                    div: peerDiv, 
-                    audio: remoteAudio, 
-                    username: peerUsername 
-                };
-                audioWrapper = remoteAudioElements[peerId];
-            }
-            audioWrapper.audio.srcObject = event.streams[0];
-        } else if (event.track.kind === 'video') {
-            let videoWrapper = remoteVideoElements[peerId];
-            const isScreenShare = event.track.label.toLowerCase().includes('screen') || 
-                                event.track.label.toLowerCase().includes('display');
-            
-            if (!videoWrapper || (videoWrapper.isScreenShare !== isScreenShare)) {
-                if (videoWrapper) {
-                    videoWrapper.div.remove();
-                }
-                videoWrapper = createRemoteVideo(peerId, peerUsername, isScreenShare);
-                videoWrapper.isScreenShare = isScreenShare;
-                remoteVideoElements[peerId] = videoWrapper;
-            }
-            videoWrapper.video.srcObject = event.streams[0];
-        }
-    };
-}
-
-// Kamera işlevselliği için yeni fonksiyonlar
-async function startCamera() {
-    try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ 
-            video: true,
-            audio: false 
-        });
-        
-        cameraButton.classList.add('hidden');
-        stopCameraButton.classList.remove('hidden');
-
-        // Kamera akışını tüm bağlantılara ekle
-        Object.keys(peerConnections).forEach(async (peerId) => {
-            const pc = peerConnections[peerId];
-            if (pc && pc.signalingState === 'stable') {
-                cameraStream.getTracks().forEach(track => {
-                    pc.addTrack(track, cameraStream);
-                });
-                await initiateOffer(peerId);
-            }
-        });
-
-        // Yerel kamera görüntüsünü göster
-        const localVideoWrapper = document.createElement('div');
-        localVideoWrapper.id = 'localVideoWrapper';
-        localVideoWrapper.className = 'video-wrapper loading';
-        
-        const label = document.createElement('p');
-        label.textContent = 'Senin Kameran';
-
-        const localVideo = document.createElement('video');
-        localVideo.id = 'localVideo';
-        localVideo.autoplay = true;
-        localVideo.playsInline = true;
-        localVideo.muted = true;
-        localVideo.srcObject = cameraStream;
-        
-        localVideoWrapper.appendChild(label);
-        localVideoWrapper.appendChild(localVideo);
-        
-        const cameraContainer = document.getElementById('cameraVideoContainer');
-        cameraContainer.insertBefore(localVideoWrapper, cameraContainer.firstChild);
-
-        // Animasyon için timeout
-        setTimeout(() => {
-            localVideoWrapper.classList.remove('loading');
-        }, 100);
-
-    } catch (error) {
-        console.error('Kamera başlatılırken hata:', error);
-        alert('Kamera başlatılamadı: ' + error.message);
-        stopCamera();
-    }
-}
-
-function stopCamera() {
-    if (cameraStream) {
-        cameraStream.getTracks().forEach(track => {
-            track.stop();
-            Object.values(peerConnections).forEach(pc => {
-                const senders = pc.getSenders();
-                senders.forEach(sender => {
-                    if (sender.track && sender.track.kind === 'video' && !sender.track.label.toLowerCase().includes('screen')) {
-                        pc.removeTrack(sender);
-                    }
-                });
-            });
-        });
-        cameraStream = null;
-
-        const localVideoWrapper = document.getElementById('localVideoWrapper');
-        if (localVideoWrapper) {
-            localVideoWrapper.classList.add('loading');
-            setTimeout(() => {
-                localVideoWrapper.remove();
             }, 300);
         }
     }
