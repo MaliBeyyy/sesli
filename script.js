@@ -1229,42 +1229,51 @@ socket.on('peer-camera-stopped', (data) => {
 });
 
 // Yapıştırma olayını dinle
-document.addEventListener('paste', (e) => {
-    console.log('Yapıştırma olayı tetiklendi');
-    
-    // Eğer chat-input odakta değilse, işlemi yapma
-    if (document.activeElement !== chatInput) {
-        console.log('Chat input odakta değil, yapıştırma işlemi iptal edildi');
-        return;
-    }
+window.addEventListener('paste', async (e) => {
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        console.log('Pano içeriği okunuyor...');
 
-    const items = e.clipboardData.items;
-    console.log('Pano içeriği:', items);
-
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        console.log('İçerik türü:', item.type);
-        
-        if (item.type.indexOf('image') !== -1) {
-            console.log('Resim bulundu, işleniyor...');
-            e.preventDefault(); // Varsayılan yapıştırma işlemini engelle
-            
-            const file = items[i].getAsFile();
-            const reader = new FileReader();
-            
-            reader.onload = (e) => {
-                console.log('Resim yüklendi, önizleme gösteriliyor');
-                selectedImage = e.target.result;
-                previewImage.src = selectedImage;
-                imagePreview.classList.remove('hidden');
-            };
-            
-            reader.onerror = (error) => {
-                console.error('Resim okuma hatası:', error);
-            };
-            
-            reader.readAsDataURL(file);
-            break;
+        for (const clipboardItem of clipboardItems) {
+            for (const type of clipboardItem.types) {
+                if (type.startsWith('image/')) {
+                    const blob = await clipboardItem.getType(type);
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        console.log('Resim başarıyla okundu');
+                        selectedImage = e.target.result;
+                        previewImage.src = selectedImage;
+                        imagePreview.classList.remove('hidden');
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        }
+    } catch (err) {
+        // Eğer yeni API desteklenmiyorsa, eski yöntemi dene
+        try {
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        console.log('Resim başarıyla okundu (eski yöntem)');
+                        selectedImage = e.target.result;
+                        previewImage.src = selectedImage;
+                        imagePreview.classList.remove('hidden');
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Resim yapıştırma hatası:', error);
         }
     }
 });
