@@ -689,17 +689,9 @@ function clearChat() {
 // Temizleme butonu için event listener
 clearChatButton.addEventListener('click', clearChat);
 
-// Link dönüştürme fonksiyonu
-function linkify(text) {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, function(url) {
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-    });
-}
-
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (socket && chatInput.value.trim()) {
+    if (chatInput.value && socket) {
         console.log('Mesaj gönderiliyor:', chatInput.value);
         // Mesajı gönder
         socket.emit('chat message', {
@@ -711,7 +703,7 @@ chatForm.addEventListener('submit', (e) => {
         // Kendi mesajımızı hemen göster
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', 'my-message');
-        messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${linkify(chatInput.value)}`;
+        messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${chatInput.value}`;
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
         
@@ -733,21 +725,19 @@ function setupChatListeners() {
         const messageElement = document.createElement('div');
         messageElement.classList.add('message');
         
+        // Sistem mesajları için farklı stil
         if (msg.type === 'system') {
             messageElement.classList.add('system-message');
-            messageElement.textContent = `${msg.sender} ${msg.text}`;
+            messageElement.innerHTML = `${msg.sender} ${msg.text}`;
         } else {
-            messageElement.classList.add('other-message');
-            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${linkify(msg.text)}`;
+            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
         }
         
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
         
-        // Sohbet kapalıysa butonu vurgula
-        if (!isChatVisible) {
-            highlightChatButton();
-        }
+        // Yeni mesaj geldiğinde butonu vurgula
+        highlightChatButton();
     });
 }
 
