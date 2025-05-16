@@ -909,6 +909,7 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
                 if (remoteVideoElements[peerId] && !isScreenShare) {
                     removeVideoElement(remoteVideoElements[peerId]);
                     delete remoteVideoElements[peerId];
+                    reorganizeVideos();
                 }
             };
 
@@ -919,6 +920,7 @@ function updatePeerConnectionTrackHandler(pc, peerId, peerUsername) {
                     if (remoteVideoElements[peerId]) {
                         removeVideoElement(remoteVideoElements[peerId]);
                         delete remoteVideoElements[peerId];
+                        reorganizeVideos();
                     }
                 }
             };
@@ -1013,7 +1015,7 @@ function stopCamera() {
                     }
                 });
 
-                // Değişiklikleri bildirmek için yeni bir offer gönder
+                // Her peer için yeni bir offer gönder
                 try {
                     initiateOffer(pc.peerId);
                 } catch (error) {
@@ -1024,7 +1026,7 @@ function stopCamera() {
 
         // Diğer kullanıcılara kamera kapatma sinyali gönder
         if (socket) {
-            socket.emit('camera-stopped');
+            socket.emit('camera-stopped', { userId: socket.id });
             console.log('Kamera kapatma sinyali gönderildi');
         }
 
@@ -1037,6 +1039,7 @@ function stopCamera() {
             setTimeout(() => {
                 if (localVideoWrapper.parentNode) {
                     localVideoWrapper.parentNode.removeChild(localVideoWrapper);
+                    reorganizeVideos();
                 }
             }, 300);
         }
@@ -1106,9 +1109,14 @@ function leaveRoom() {
 leaveRoomButton.addEventListener('click', leaveRoom);
 
 // Socket.io event listener'larına yeni event ekle
-socket.on('peer-camera-stopped', (peerId) => {
+socket.on('peer-camera-stopped', (data) => {
+    const peerId = data.userId;
+    console.log('Peer kamera durdurma sinyali alındı:', peerId);
+    
     if (remoteVideoElements[peerId] && !remoteVideoElements[peerId].isScreenShare) {
+        console.log('Video elementi kaldırılıyor:', peerId);
         removeVideoElement(remoteVideoElements[peerId]);
         delete remoteVideoElements[peerId];
+        reorganizeVideos();
     }
 });
