@@ -653,6 +653,12 @@ function clearChat() {
 // Temizleme butonu için event listener
 clearChatButton.addEventListener('click', clearChat);
 
+// URL'leri tıklanabilir bağlantılara dönüştürme fonksiyonu
+function makeLinksClickable(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (chatInput.value && socket) {
@@ -667,7 +673,7 @@ chatForm.addEventListener('submit', (e) => {
         // Kendi mesajımızı hemen göster
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', 'my-message');
-        messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${chatInput.value}`;
+        messageElement.innerHTML = `<strong>${myUsername || 'Misafir'}:</strong> ${makeLinksClickable(chatInput.value)}`;
         messages.appendChild(messageElement);
         messages.scrollTop = messages.scrollHeight;
         
@@ -694,7 +700,7 @@ function setupChatListeners() {
             messageElement.classList.add('system-message');
             messageElement.innerHTML = `${msg.sender} ${msg.text}`;
         } else {
-            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
+            messageElement.innerHTML = `<strong>${msg.sender}:</strong> ${makeLinksClickable(msg.text)}`;
         }
         
         messages.appendChild(messageElement);

@@ -726,6 +726,25 @@
             }
         }
 
+        .message a {
+            color: #007bff;
+            text-decoration: underline;
+            word-break: break-all;
+        }
+
+        .my-message a {
+            color: #ffffff;
+        }
+
+        /* Dark mode için bağlantı renkleri */
+        :root[data-theme="dark"] .message a {
+            color: #66b3ff;
+        }
+
+        :root[data-theme="dark"] .my-message a {
+            color: #ffffff;
+        }
+
     </style>
 </head>
 <body>
