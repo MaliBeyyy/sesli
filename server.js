@@ -27,7 +27,8 @@ const io = socketIO(server, {
         allowedHeaders: ["*"],
         credentials: true
     },
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    maxHttpBufferSize: 5e6 // 5MB'a kadar dosya transferine izin ver
 });
 
 // Her oda için ayrı kullanıcı listesi ve host bilgisi tutacağız
@@ -150,7 +151,8 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('chat message', {
             text: msg.text,
             sender: msg.sender || 'Misafir',
-            type: msg.type
+            type: msg.type,
+            image: msg.image // Resim verisini ekle
         });
     });
 

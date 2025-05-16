@@ -783,7 +783,7 @@ chatForm.addEventListener('submit', async (e) => {
                 imagePreview.src = '';
             };
             reader.readAsDataURL(pastedImage);
-        } else {
+        } else if (chatInput.value) { // Sadece metin varsa
             // Sadece metin mesajı gönder
             socket.emit('chat message', messageData);
             
