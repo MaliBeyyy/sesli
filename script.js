@@ -1227,3 +1227,26 @@ socket.on('peer-camera-stopped', (data) => {
         }
     }
 });
+
+// Yapıştırma olayını dinle
+chatInput.addEventListener('paste', (e) => {
+    const items = e.clipboardData.items;
+    
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            e.preventDefault(); // Varsayılan yapıştırma işlemini engelle
+            
+            const file = items[i].getAsFile();
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                selectedImage = e.target.result;
+                previewImage.src = selectedImage;
+                imagePreview.classList.remove('hidden');
+            };
+            
+            reader.readAsDataURL(file);
+            break;
+        }
+    }
+});
