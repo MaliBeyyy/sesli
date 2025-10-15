@@ -186,6 +186,12 @@ function connectToSignalingServer() {
             // Yeni kullanıcıya offer gönder
             initiateOffer(newPeerId);
         }
+
+        // Yerel ses zaten aktifse, kamera/ekran olmasa bile offer gönder
+        if (localStream && localStream.active) {
+            console.log('Yerel ses aktif, yeni kullanıcıya offer gönderiliyor:', newPeerId);
+            initiateOffer(newPeerId);
+        }
     });
 
     socket.on('room-full', () => {
@@ -208,12 +214,8 @@ function connectToSignalingServer() {
         try {
             await pc.setRemoteDescription(new RTCSessionDescription(sdp));
             console.log(`Remote description (offer from ${fromUsername || fromId}) ayarlandı.`);
-            if (localStream && localStream.active) {
-                await sendAnswer(fromId);
-            } else {
-                console.warn(`Offer (${fromUsername || fromId} kullanıcısından) alındı ama yerel ses akışı hazır değil. "Sesi Başlat" bekleniyor.`);
-                idsThatNeedMyAnswer.add(fromId);
-            }
+            // Yerel ses başlamamış olsa bile hemen answer üret ve gönder
+            await sendAnswer(fromId);
         } catch (error) {
             console.error(`Offer (${fromUsername || fromId} kullanıcısından) işlenirken hata:`, error);
         }
