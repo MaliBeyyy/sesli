@@ -30,14 +30,17 @@ let myRoom = ''; // Oda adını saklamak için
 
 let isHost = false; // Host durumunu takip etmek için
 
-// STUN sunucu yapılandırması (NAT traversal için)
+// STUN/TURN sunucu yapılandırması (NAT traversal için)
 const STUN_SERVERS = {
   iceServers: [
+    // Google STUN sunucuları
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+    
+    // Alternatif STUN sunucuları
     { urls: 'stun:stun.ekiga.net' },
     { urls: 'stun:stun.ideasip.com' },
     { urls: 'stun:stun.schlund.de' },
@@ -50,8 +53,36 @@ const STUN_SERVERS = {
     { urls: 'stun:stun.gmx.net' },
     { urls: 'stun:stun.callwithus.com' },
     { urls: 'stun:stun.counterpath.net' },
-    { urls: 'stun:stun.internetcalls.com' }
-  ]
+    { urls: 'stun:stun.internetcalls.com' },
+    
+    // TURN sunucuları (NAT traversal için kritik)
+    { 
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    { 
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    { 
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:freeturn.tel:3478',
+      username: 'free',
+      credential: 'free'
+    },
+    {
+      urls: 'turn:freeturn.tel:5349',
+      username: 'free',
+      credential: 'free'
+    }
+  ],
+  iceCandidatePoolSize: 10
 };
 
 let idsThatNeedMyOffer = new Set(); // Odadaki mevcut kişilere offer göndermemiz gerekebilir
@@ -311,15 +342,26 @@ function connectToSignalingServer() {
     socket.on('ice-candidate', async (data) => {
         const { candidate, fromId } = data;
         if (fromId === socket.id) return;
-        // console.log(`ICE adayı alındı: ${fromId} kullanıcısından`); // Çok fazla log üretebilir
+        
         const pc = peerConnections[fromId];
         if (pc && candidate) {
             try {
+                console.log(`ICE candidate alındı (${fromId}): ${candidate.type} - ${candidate.protocol}`);
                 await pc.addIceCandidate(new RTCIceCandidate(candidate));
-                // console.log(`ICE adayı (${fromId} kullanıcısından) eklendi.`);
+                console.log(`✅ ICE candidate eklendi (${fromId})`);
             } catch (error) {
-                console.error(`ICE adayı (${fromId} kullanıcısından) eklenirken hata:`, error);
+                console.error(`❌ ICE candidate eklenirken hata (${fromId}):`, error);
+                
+                // Eğer candidate eklenemiyorsa, bağlantıyı yeniden dene
+                if (error.name === 'OperationError' || error.name === 'InvalidStateError') {
+                    console.log(`🔄 ICE candidate hatası nedeniyle bağlantı yeniden deneniyor: ${fromId}`);
+                    setTimeout(() => {
+                        restartConnection(fromId);
+                    }, 1000);
+                }
             }
+        } else {
+            console.warn(`⚠️ ICE candidate alındı ama PeerConnection bulunamadı: ${fromId}`);
         }
     });
 
@@ -423,7 +465,10 @@ function createPeerConnection(peerId, peerUsername = 'Diğer Kullanıcı') {
 
     pc.onicecandidate = (event) => {
         if (event.candidate) {
+            console.log(`ICE candidate bulundu (${peerUsername} - ${peerId}): ${event.candidate.type} - ${event.candidate.protocol}`);
             socket.emit('ice-candidate', { candidate: event.candidate, targetId: peerId });
+        } else {
+            console.log(`ICE candidate toplama tamamlandı (${peerUsername} - ${peerId})`);
         }
     };
 
@@ -432,10 +477,25 @@ function createPeerConnection(peerId, peerUsername = 'Diğer Kullanıcı') {
     pc.oniceconnectionstatechange = () => {
         if (pc) {
             console.log(`ICE bağlantı durumu (${peerUsername} - ${peerId}): ${pc.iceConnectionState}`);
-            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
-                console.warn(`Bağlantı sorunu/kesintisi (${peerUsername} - ${peerId}).`);
+            
+            if (pc.iceConnectionState === 'failed') {
+                console.warn(`❌ Bağlantı başarısız (${peerUsername} - ${peerId}). Yeniden deneme...`);
                 console.warn(`ICE Gathering State: ${pc.iceGatheringState}`);
                 console.warn(`Signaling State: ${pc.signalingState}`);
+                
+                // Bağlantı başarısız olduğunda yeniden deneme
+                setTimeout(() => {
+                    if (pc.iceConnectionState === 'failed') {
+                        console.log(`🔄 Bağlantı yeniden deneniyor: ${peerUsername} (${peerId})`);
+                        restartConnection(peerId);
+                    }
+                }, 2000);
+            } else if (pc.iceConnectionState === 'disconnected') {
+                console.warn(`⚠️ Bağlantı kesildi (${peerUsername} - ${peerId}). Yeniden bağlanma deneniyor...`);
+            } else if (pc.iceConnectionState === 'connected') {
+                console.log(`✅ Bağlantı başarılı (${peerUsername} - ${peerId})`);
+            } else if (pc.iceConnectionState === 'completed') {
+                console.log(`🎉 Bağlantı tamamlandı (${peerUsername} - ${peerId})`);
             }
         }
     };
@@ -544,6 +604,39 @@ function cleanupPeerConnection(peerId) {
 
     idsThatNeedMyOffer.delete(peerId);
     idsThatNeedMyAnswer.delete(peerId);
+}
+
+// Bağlantı yeniden deneme fonksiyonu
+function restartConnection(peerId) {
+    console.log(`🔄 Bağlantı yeniden başlatılıyor: ${peerId}`);
+    
+    // Mevcut bağlantıyı temizle
+    cleanupPeerConnection(peerId);
+    
+    // Kısa bir bekleme sonrası yeni bağlantı oluştur
+    setTimeout(() => {
+        if (socket && socket.connected) {
+            console.log(`🔄 Yeni PeerConnection oluşturuluyor: ${peerId}`);
+            const pc = createPeerConnection(peerId, 'Yeniden Bağlanan Kullanıcı');
+            peerConnections[peerId] = pc;
+            
+            // Eğer yerel stream varsa, yeni bağlantıya ekle
+            if (localStream && localStream.active) {
+                localStream.getTracks().forEach(track => {
+                    try {
+                        pc.addTrack(track, localStream);
+                    } catch (e) {
+                        console.error('Track eklenirken hata (restart):', e);
+                    }
+                });
+                
+                // Yeni offer gönder
+                setTimeout(() => {
+                    initiateOffer(peerId);
+                }, 1000);
+            }
+        }
+    }, 3000);
 }
 
 // --- Medya Fonksiyonları ---
