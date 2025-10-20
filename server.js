@@ -245,3 +245,8 @@ server.listen(PORT, () => {
 app.get('/ping', (req, res) => {
     res.send('pong');
 });
+
+// Socket.IO client dosyasını sunmak için
+app.get('/socket.io/socket.io.js', (req, res) => {
+    res.redirect('https://cdn.socket.io/4.8.1/socket.io.min.js');
+});

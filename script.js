@@ -150,6 +150,14 @@ function connectToSignalingServer() {
     if (socket) {
         return;
     }
+    
+    // Socket.IO kütüphanesi kontrolü
+    if (typeof io === 'undefined') {
+        console.error('Socket.IO kütüphanesi yüklenmemiş!');
+        alert('Socket.IO kütüphanesi yüklenmemiş. Lütfen sayfayı yenileyin.');
+        return;
+    }
+    
     // WebRTC testini başlat
     testWebRTCConnection();
     

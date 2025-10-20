@@ -985,14 +985,19 @@
         </div>
     </footer>
 
+    <!-- Socket.IO CDN - Daha güvenilir -->
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script>
-        // Socket.IO kaynağını dinamik olarak ayarla
-        const socketScript = document.createElement('script');
-        socketScript.src = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-            ? 'http://localhost:3000/socket.io/socket.io.js'
-            : 'https://diskurt-oy50.onrender.com/socket.io/socket.io.js';
-        document.head.appendChild(socketScript);
+        // Socket.IO yüklendikten sonra script.js'i yükle
+        if (typeof io !== 'undefined') {
+            console.log('Socket.IO kütüphanesi CDN\'den yüklendi');
+            const mainScript = document.createElement('script');
+            mainScript.src = 'script.js';
+            document.head.appendChild(mainScript);
+        } else {
+            console.error('Socket.IO kütüphanesi yüklenemedi');
+            alert('Socket.IO kütüphanesi yüklenemedi. Lütfen sayfayı yenileyin.');
+        }
     </script>
-    <script src="script.js"></script>
 </body>
 </html>
