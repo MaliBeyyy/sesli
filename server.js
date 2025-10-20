@@ -28,13 +28,44 @@ const io = socketIO(server, {
         credentials: true
     },
     transports: ['websocket', 'polling'],
-    maxHttpBufferSize: 5e6 // 5MB'a kadar dosya transferine izin ver
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 30000,
+    maxHttpBufferSize: 5e6, // 5MB'a kadar dosya transferine izin ver
+    allowEIO3: true,
+    // Render free tier için optimize edilmiş ayarlar
+    path: '/socket.io/',
+    serveClient: false,
+    cookie: false,
+    // Bellek kullanımını optimize et
+    perMessageDeflate: {
+        threshold: 2048, // 2KB'den büyük mesajları sıkıştır
+        zlibInflateOptions: {
+            chunkSize: 10 * 1024 // Chunk boyutunu küçült
+        }
+    },
+    // WebRTC için ek ayarlar
+    allowUpgrades: true,
+    upgradeTimeout: 10000,
+    // Render için özel ayarlar
+    compression: true
 });
+
+// Sunucu durumunu izle
+let activeConnections = 0;
+setInterval(() => {
+    console.log(`Aktif bağlantı sayısı: ${activeConnections}`);
+    // Bellek kullanımını logla
+    const used = process.memoryUsage();
+    console.log(`Bellek Kullanımı: ${Math.round(used.heapUsed / 1024 / 1024 * 100) / 100} MB`);
+}, 30000);
 
 // Her oda için ayrı kullanıcı listesi ve host bilgisi tutacağız
 const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } }, host: socketId } }
 
 io.on('connection', (socket) => {
+    activeConnections++;
+    
     const clientQueryUsername = socket.handshake.query.username;
     const roomId = socket.handshake.query.roomId;
     let processedUsername = clientQueryUsername || 'AnonimKullanici';
@@ -129,11 +160,17 @@ io.on('connection', (socket) => {
 
     socket.on('ice-candidate', (data) => {
         const targetPeerData = room.peers[data.targetId];
+        const senderUsername = room.peers[socket.id]?.username || socket.id;
+        const targetUsername = targetPeerData?.username || data.targetId;
+        
         if (targetPeerData && targetPeerData.socket) {
+            console.log(`[Sunucu] ICE candidate iletiliyor: ${senderUsername} -> ${targetUsername} (Oda: ${roomId})`);
             targetPeerData.socket.emit('ice-candidate', { 
                 candidate: data.candidate, 
                 fromId: socket.id,
             });
+        } else {
+            console.warn(`[Sunucu] ICE candidate hedefi bulunamadı: ${data.targetId} (Oda: ${roomId})`);
         }
     });
 
@@ -157,6 +194,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        activeConnections--;
         if (rooms.has(roomId)) {
             const room = rooms.get(roomId);
             const disconnectedUser = room.peers[socket.id];

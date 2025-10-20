@@ -34,7 +34,23 @@ let isHost = false; // Host durumunu takip etmek için
 const STUN_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.ekiga.net' },
+    { urls: 'stun:stun.ideasip.com' },
+    { urls: 'stun:stun.schlund.de' },
+    { urls: 'stun:stun.stunprotocol.org:3478' },
+    { urls: 'stun:stun.voiparound.com' },
+    { urls: 'stun:stun.voipbuster.com' },
+    { urls: 'stun:stun.voipstunt.com' },
+    { urls: 'stun:stun.counterpath.com' },
+    { urls: 'stun:stun.1und1.de' },
+    { urls: 'stun:stun.gmx.net' },
+    { urls: 'stun:stun.callwithus.com' },
+    { urls: 'stun:stun.counterpath.net' },
+    { urls: 'stun:stun.internetcalls.com' }
   ]
 };
 
@@ -42,6 +58,49 @@ let idsThatNeedMyOffer = new Set(); // Odadaki mevcut kişilere offer göndermem
 let idsThatNeedMyAnswer = new Set(); // Bize offer gönderen ama henüz cevaplayamadıklarımız
 
 console.log('Bağlanılacak sunucu:', signalingServerUrl);
+
+// WebRTC bağlantı testi
+function testWebRTCConnection() {
+    console.log('=== WebRTC Bağlantı Testi Başlatılıyor ===');
+    
+    // Tarayıcı desteği kontrolü
+    if (!window.RTCPeerConnection) {
+        console.error('WebRTC desteklenmiyor!');
+        return false;
+    }
+    
+    // STUN sunucu testi
+    const testPC = new RTCPeerConnection(STUN_SERVERS);
+    
+    testPC.onicecandidate = (event) => {
+        if (event.candidate) {
+            console.log('STUN sunucu çalışıyor, ICE candidate alındı:', event.candidate.type);
+        }
+    };
+    
+    testPC.onicegatheringstatechange = () => {
+        console.log('ICE Gathering State:', testPC.iceGatheringState);
+    };
+    
+    testPC.oniceconnectionstatechange = () => {
+        console.log('ICE Connection State:', testPC.iceConnectionState);
+    };
+    
+    // Test offer oluştur
+    testPC.createOffer().then(offer => {
+        console.log('WebRTC offer oluşturulabildi');
+        return testPC.setLocalDescription(offer);
+    }).then(() => {
+        console.log('Local description ayarlandı');
+        testPC.close();
+        console.log('=== WebRTC Test Tamamlandı ===');
+    }).catch(error => {
+        console.error('WebRTC test hatası:', error);
+        testPC.close();
+    });
+    
+    return true;
+}
 
 // Tema yönetimi için değişkenler
 const themeToggle = document.createElement('button');
@@ -91,6 +150,9 @@ function connectToSignalingServer() {
     if (socket) {
         return;
     }
+    // WebRTC testini başlat
+    testWebRTCConnection();
+    
     socket = io(signalingServerUrl, {
         query: { 
             username: myUsername,
@@ -364,8 +426,18 @@ function createPeerConnection(peerId, peerUsername = 'Diğer Kullanıcı') {
             console.log(`ICE bağlantı durumu (${peerUsername} - ${peerId}): ${pc.iceConnectionState}`);
             if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
                 console.warn(`Bağlantı sorunu/kesintisi (${peerUsername} - ${peerId}).`);
+                console.warn(`ICE Gathering State: ${pc.iceGatheringState}`);
+                console.warn(`Signaling State: ${pc.signalingState}`);
             }
         }
+    };
+
+    pc.onicegatheringstatechange = () => {
+        console.log(`ICE Gathering State (${peerUsername} - ${peerId}): ${pc.iceGatheringState}`);
+    };
+
+    pc.onconnectionstatechange = () => {
+        console.log(`Connection State (${peerUsername} - ${peerId}): ${pc.connectionState}`);
     };
 
     if (localStream && localStream.active) {
@@ -469,6 +541,14 @@ function cleanupPeerConnection(peerId) {
 // --- Medya Fonksiyonları ---
 async function getInitialMediaPermission() {
     console.log('getInitialMediaPermission fonksiyonu çağrıldı.');
+    
+    // HTTPS kontrolü
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        console.warn('HTTPS gereklidir! WebRTC çalışmayabilir.');
+        alert('Bu uygulama HTTPS gerektirir. Lütfen HTTPS üzerinden erişin.');
+        return false;
+    }
+    
     try {
         console.log('Kullanıcıdan genel medya erişim izni isteniyor...');
         const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
