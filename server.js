@@ -22,7 +22,7 @@ app.use(express.static(path.join(__dirname, '/')));
 
 const server = http.createServer(app);
 
-// Socket.IO yapılandırması
+// Socket.IO yapılandırması - Render free tier için optimize edilmiş
 const io = socketIO(server, {
     cors: {
         origin: "*",
@@ -31,10 +31,10 @@ const io = socketIO(server, {
         credentials: true
     },
     transports: ['websocket', 'polling'],
-    pingTimeout: 60000,
-    pingInterval: 25000,
-    connectTimeout: 30000,
-    maxHttpBufferSize: 5e6, // 5MB'a kadar dosya transferine izin ver
+    pingTimeout: 30000, // 30 saniye - daha kısa
+    pingInterval: 10000, // 10 saniye - daha sık ping
+    connectTimeout: 20000, // 20 saniye
+    maxHttpBufferSize: 1e6, // 1MB - daha küçük buffer
     allowEIO3: true,
     // Render free tier için optimize edilmiş ayarlar
     path: '/socket.io/',
@@ -42,16 +42,22 @@ const io = socketIO(server, {
     cookie: false,
     // Bellek kullanımını optimize et
     perMessageDeflate: {
-        threshold: 2048, // 2KB'den büyük mesajları sıkıştır
+        threshold: 1024, // 1KB'den büyük mesajları sıkıştır
         zlibInflateOptions: {
-            chunkSize: 10 * 1024 // Chunk boyutunu küçült
+            chunkSize: 5 * 1024 // Chunk boyutunu küçült
         }
     },
     // WebRTC için ek ayarlar
     allowUpgrades: true,
-    upgradeTimeout: 10000,
+    upgradeTimeout: 5000, // 5 saniye
     // Render için özel ayarlar
-    compression: true
+    compression: true,
+    // Bağlantı stabilitesi için
+    forceNew: false,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000
 });
 
 // Sunucu durumunu izle
@@ -71,9 +77,9 @@ setInterval(() => {
             console.log('[Keep-Alive] Sunucu aktif tutuluyor...');
         }
     }
-}, 30000);
+}, 15000); // 15 saniye - daha sık kontrol
 
-// Her 5 dakikada bir sunucuyu aktif tut
+// Her 3 dakikada bir sunucuyu aktif tut
 setInterval(() => {
     console.log(`[Keep-Alive] Sunucu aktif - ${new Date().toISOString()}`);
     // Bellek temizliği
@@ -82,14 +88,14 @@ setInterval(() => {
         console.log('Garbage collection çalıştırıldı');
     }
     
-    // Boş odaları temizle
+    // Boş odaları temizle (sadece timer'ı olmayan odalar)
     for (const [roomId, room] of rooms.entries()) {
-        if (Object.keys(room.peers).length === 0) {
-            rooms.delete(roomId);
-            console.log(`[Cleanup] Boş oda silindi: ${roomId}`);
+        if (Object.keys(room.peers).length === 0 && !room.cleanupTimer) {
+            // Bu oda zaten timer ile temizlenecek, elle silme
+            console.log(`[Cleanup] Oda ${roomId} zaten timer ile temizlenecek`);
         }
     }
-}, 5 * 60 * 1000); // 5 dakika
+}, 3 * 60 * 1000); // 3 dakika - daha sık
 
 // Bellek kullanımı izleme ve uyarı
 setInterval(() => {
@@ -112,7 +118,8 @@ setInterval(() => {
 }, 2 * 60 * 1000); // 2 dakika
 
 // Her oda için ayrı kullanıcı listesi ve host bilgisi tutacağız
-const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } }, host: socketId } }
+const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } }, host: socketId, lastActivity: timestamp, cleanupTimer: timer } }
+const roomCleanupTimers = new Map(); // { roomId: timer } - Oda temizleme timer'ları
 
 io.on('connection', (socket) => {
     activeConnections++;
@@ -130,12 +137,35 @@ io.on('connection', (socket) => {
         lastActivity = Date.now();
     });
 
+    // Heartbeat sistemi
+    socket.on('heartbeat', (data) => {
+        lastActivity = Date.now();
+        console.log(`[Heartbeat] ${data.username} - ${new Date(data.timestamp).toISOString()}`);
+        // Heartbeat yanıtı gönder
+        socket.emit('heartbeat-ack', {
+            timestamp: Date.now(),
+            serverTime: new Date().toISOString()
+        });
+    });
+
     // Oda yoksa oluştur ve ilk katılanı host yap
     if (!rooms.has(roomId)) {
         rooms.set(roomId, { 
             peers: {}, 
-            host: socket.id // İlk katılan kişiyi host yap
+            host: socket.id, // İlk katılan kişiyi host yap
+            lastActivity: Date.now(),
+            cleanupTimer: null
         });
+        console.log(`[Sunucu] Yeni oda oluşturuldu: ${roomId}`);
+    } else {
+        // Mevcut oda varsa, temizleme timer'ını iptal et
+        const room = rooms.get(roomId);
+        if (room.cleanupTimer) {
+            clearTimeout(room.cleanupTimer);
+            room.cleanupTimer = null;
+            console.log(`[Sunucu] Oda ${roomId} temizleme timer'ı iptal edildi`);
+        }
+        room.lastActivity = Date.now();
     }
 
     const room = rooms.get(roomId);
@@ -285,10 +315,25 @@ io.on('connection', (socket) => {
                 }
             });
 
-            // Oda boşsa odayı sil
+            // Oda boşsa, 5 dakika sonra sil (geçici bağlantı kopmaları için)
             if (Object.keys(room.peers).length === 0) {
-                rooms.delete(roomId);
-                console.log(`[Sunucu] Oda silindi: ${roomId} (boş)`);
+                console.log(`[Sunucu] Oda ${roomId} boş, 5 dakika sonra silinecek`);
+                
+                // Mevcut timer varsa iptal et
+                if (room.cleanupTimer) {
+                    clearTimeout(room.cleanupTimer);
+                }
+                
+                // 5 dakika sonra odayı sil
+                room.cleanupTimer = setTimeout(() => {
+                    if (rooms.has(roomId) && Object.keys(rooms.get(roomId).peers).length === 0) {
+                        rooms.delete(roomId);
+                        roomCleanupTimers.delete(roomId);
+                        console.log(`[Sunucu] Oda silindi: ${roomId} (5 dakika sonra)`);
+                    }
+                }, 5 * 60 * 1000); // 5 dakika
+                
+                roomCleanupTimers.set(roomId, room.cleanupTimer);
             }
         }
     });

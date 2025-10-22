@@ -27,8 +27,33 @@ const signalingServerUrl = window.location.hostname === 'localhost' || window.lo
     : 'https://diskurt-oy50.onrender.com';
 let myUsername = '';
 let myRoom = ''; // Oda adını saklamak için
+let lastRoomData = null; // Son oda verilerini sakla
+let reconnectAttempts = 0; // Yeniden bağlanma deneme sayısı
+const MAX_RECONNECT_ATTEMPTS = 10; // Maksimum yeniden bağlanma denemesi
 
 let isHost = false; // Host durumunu takip etmek için
+
+// Sayfa yüklendiğinde localStorage'dan oda verilerini yükle
+function loadLastRoomData() {
+    try {
+        const savedData = localStorage.getItem('lastRoomData');
+        if (savedData) {
+            const data = JSON.parse(savedData);
+            // 24 saat içindeki verileri kabul et
+            if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+                lastRoomData = data;
+                console.log('Son oda verileri yüklendi:', lastRoomData);
+                return true;
+            } else {
+                // Eski veri, sil
+                localStorage.removeItem('lastRoomData');
+            }
+        }
+    } catch (error) {
+        console.error('localStorage veri yükleme hatası:', error);
+    }
+    return false;
+}
 
 // Bağlantı durumu gösterme fonksiyonu
 function showConnectionStatus(message, type = 'info') {
@@ -285,13 +310,17 @@ function connectToSignalingServer() {
     testWebRTCConnection();
     
     socket = io(signalingServerUrl, {
-        query: { 
+        query: {
             username: myUsername,
             roomId: myRoom // Oda ID'sini query parametresi olarak ekle
         },
         transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionAttempts: 20, // Daha fazla deneme
+        reconnectionDelay: 500, // Daha hızlı yeniden bağlanma
+        reconnectionDelayMax: 5000, // Maksimum gecikme
+        timeout: 10000, // Bağlantı timeout'u
+        forceNew: true, // Her seferinde yeni bağlantı
+        autoConnect: true
     });
 
     socket.on('connect', () => {
@@ -316,6 +345,10 @@ function connectToSignalingServer() {
                 }, 1000);
             }
         }
+        
+        // Bağlantı başarılı oldu, deneme sayısını sıfırla
+        reconnectAttempts = 0;
+        showConnectionStatus('Bağlantı kurtarıldı!', 'success');
     });
 
     socket.on('connect_error', (error) => {
@@ -326,22 +359,49 @@ function connectToSignalingServer() {
 
     socket.on('disconnect', (reason) => {
         console.log('Sunucu bağlantısı kesildi:', reason);
+        reconnectAttempts++;
         showConnectionStatus('Bağlantı kesildi, yeniden bağlanılıyor...', 'warning');
+        
+        // Oda verilerini sakla (hem memory hem localStorage)
+        if (myRoom && myUsername) {
+            lastRoomData = {
+                roomId: myRoom,
+                username: myUsername,
+                timestamp: Date.now()
+            };
+            
+            // localStorage'a da kaydet
+            localStorage.setItem('lastRoomData', JSON.stringify(lastRoomData));
+            console.log('Oda verileri saklandı:', lastRoomData);
+        }
     });
 
     socket.on('reconnect', (attemptNumber) => {
         console.log('Sunucuya yeniden bağlandı, deneme:', attemptNumber);
         showConnectionStatus('Bağlantı kurtarıldı!', 'success');
+        
+        // Eğer oda verileri varsa, otomatik olarak aynı odaya katıl
+        if (lastRoomData && myRoom === lastRoomData.roomId) {
+            console.log('Aynı odaya otomatik katılım:', lastRoomData.roomId);
+            showConnectionStatus('Aynı odaya yeniden katılıyorsunuz...', 'info');
+        }
     });
 
     socket.on('reconnect_error', (error) => {
         console.error('Yeniden bağlanma hatası:', error);
-        showConnectionStatus('Yeniden bağlanma hatası', 'error');
+        showConnectionStatus(`Yeniden bağlanma hatası (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, 'error');
     });
 
     socket.on('reconnect_failed', () => {
         console.error('Yeniden bağlanma başarısız');
         showConnectionStatus('Bağlantı kurulamadı, sayfayı yenileyin', 'error');
+        
+        // Son çare olarak sayfayı yenile
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        }
     });
 
     // Ping/pong mekanizması - sunucu ile bağlantıyı canlı tutmak için
@@ -349,13 +409,36 @@ function connectToSignalingServer() {
         console.log('Pong alındı - bağlantı aktif');
     });
 
-    // Her 30 saniyede bir ping gönder
+    // Her 5 saniyede bir ping gönder - çok sık
     setInterval(() => {
         if (socket && socket.connected) {
             socket.emit('ping');
             console.log('Ping gönderildi');
+        } else {
+            console.log('Socket bağlı değil, yeniden bağlanmaya çalışılıyor...');
+            if (socket) {
+                socket.connect();
+            }
         }
-    }, 30000);
+    }, 5000); // 5 saniye - çok sık ping
+
+    // Ek heartbeat sistemi - her 3 saniyede bir
+    setInterval(() => {
+        if (socket && socket.connected) {
+            // Sunucuya heartbeat gönder
+            socket.emit('heartbeat', {
+                timestamp: Date.now(),
+                username: myUsername,
+                roomId: myRoom
+            });
+        }
+    }, 3000); // 3 saniye
+
+    // Heartbeat acknowledgment'ı dinle
+    socket.on('heartbeat-ack', (data) => {
+        console.log('Heartbeat ACK alındı:', data.serverTime);
+        showConnectionStatus('Bağlantı aktif', 'success');
+    });
 
     socket.on('existing-peers', (peersData) => {
         console.log('--- existing-peers ALINDI ---');
@@ -1634,4 +1717,9 @@ window.addEventListener('paste', async (e) => {
 // Sürükleme olaylarını engelle
 chatInput.addEventListener('dragover', (e) => {
     e.preventDefault();
+});
+
+// Sayfa yüklendiğinde son oda verilerini yükle
+document.addEventListener('DOMContentLoaded', () => {
+    loadLastRoomData();
 });

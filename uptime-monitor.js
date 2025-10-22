@@ -5,7 +5,7 @@ const http = require('http');
 // Render URL'nizi buraya yazın
 const RENDER_URL = 'https://diskurt-oy50.onrender.com';
 
-// Her 10 dakikada bir sunucuyu ping'le
+// Her 5 dakikada bir sunucuyu ping'le - daha sık
 function pingServer() {
     const url = new URL(RENDER_URL);
     const protocol = url.protocol === 'https:' ? https : http;
@@ -48,7 +48,7 @@ function pingServer() {
 console.log('[Uptime Monitor] Başlatılıyor...');
 pingServer();
 
-// Her 10 dakikada bir ping gönder
-setInterval(pingServer, 10 * 60 * 1000);
+// Her 5 dakikada bir ping gönder
+setInterval(pingServer, 5 * 60 * 1000);
 
-console.log('[Uptime Monitor] Her 10 dakikada bir ping gönderilecek');
+console.log('[Uptime Monitor] Her 5 dakikada bir ping gönderilecek');
