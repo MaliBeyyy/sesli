@@ -30,6 +30,12 @@ let myRoom = ''; // Oda adını saklamak için
 
 let isHost = false; // Host durumunu takip etmek için
 
+// Keep-alive mekanizması için değişkenler
+let keepAliveInterval = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+const keepAliveIntervalTime = 30000; // 30 saniye
+
 // STUN/TURN sunucu yapılandırması (NAT traversal için)
 const STUN_SERVERS = {
   iceServers: [
@@ -80,6 +86,22 @@ const STUN_SERVERS = {
       urls: 'turn:freeturn.tel:5349',
       username: 'free',
       credential: 'free'
+    },
+    // Ek TURN sunucuları (aynı ağ için)
+    {
+      urls: 'turn:relay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:relay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:relay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     }
   ],
   iceCandidatePoolSize: 10
@@ -100,12 +122,28 @@ function testWebRTCConnection() {
         return false;
     }
     
+    // Ağ durumunu kontrol et
+    const isLocalNetwork = window.location.hostname === 'localhost' || 
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.hostname.includes('192.168.') ||
+                          window.location.hostname.includes('10.') ||
+                          window.location.hostname.includes('172.');
+    
+    if (isLocalNetwork) {
+        console.log('🏠 Yerel ağ tespit edildi - TURN sunucuları öncelikli olacak');
+    } else {
+        console.log('🌐 Dış ağ tespit edildi - STUN sunucuları yeterli olabilir');
+    }
+    
     // STUN sunucu testi
     const testPC = new RTCPeerConnection(STUN_SERVERS);
     
     testPC.onicecandidate = (event) => {
         if (event.candidate) {
-            console.log('STUN sunucu çalışıyor, ICE candidate alındı:', event.candidate.type);
+            console.log('STUN/TURN sunucu çalışıyor, ICE candidate alındı:', event.candidate.type, event.candidate.protocol);
+            if (event.candidate.type === 'relay') {
+                console.log('🎯 TURN sunucu kullanılıyor - aynı ağ sorunu çözülebilir');
+            }
         }
     };
     
@@ -176,6 +214,60 @@ themeToggle.addEventListener('click', toggleTheme);
 // Tema başlatma
 initializeTheme();
 
+// Keep-alive fonksiyonları
+function startKeepAlive() {
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+    }
+    
+    keepAliveInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`${signalingServerUrl}/keepalive`);
+            if (response.ok) {
+                console.log('Keep-alive ping başarılı');
+                reconnectAttempts = 0; // Başarılı ping sonrası reconnect sayacını sıfırla
+            } else {
+                console.warn('Keep-alive ping başarısız:', response.status);
+                handleConnectionLoss();
+            }
+        } catch (error) {
+            console.error('Keep-alive ping hatası:', error);
+            handleConnectionLoss();
+        }
+    }, keepAliveIntervalTime);
+}
+
+function stopKeepAlive() {
+    if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
+    }
+}
+
+function handleConnectionLoss() {
+    console.log('Bağlantı kaybı tespit edildi, yeniden bağlanma deneniyor...');
+    
+    if (reconnectAttempts >= maxReconnectAttempts) {
+        console.error('Maksimum yeniden bağlanma denemesi aşıldı');
+        alert('Sunucuya bağlanılamıyor. Lütfen sayfayı yenileyin.');
+        return;
+    }
+    
+    reconnectAttempts++;
+    console.log(`Yeniden bağlanma denemesi ${reconnectAttempts}/${maxReconnectAttempts}`);
+    
+    // Socket bağlantısını yeniden kur
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+    }
+    
+    // Kısa bir bekleme sonrası yeniden bağlan
+    setTimeout(() => {
+        connectToSignalingServer();
+    }, 2000 * reconnectAttempts); // Her denemede bekleme süresini artır
+}
+
 // --- Socket.IO Bağlantısı ve Olayları ---
 function connectToSignalingServer() {
     if (socket) {
@@ -198,12 +290,19 @@ function connectToSignalingServer() {
             roomId: myRoom // Oda ID'sini query parametresi olarak ekle
         },
         transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionAttempts: 10, // Daha fazla deneme
+        reconnectionDelay: 2000, // Daha uzun bekleme
+        reconnectionDelayMax: 10000, // Maksimum bekleme süresi
+        timeout: 20000, // Bağlantı timeout'u
+        forceNew: true, // Her seferinde yeni bağlantı
+        upgrade: true, // WebSocket upgrade'ini etkinleştir
+        rememberUpgrade: false // Upgrade'i hatırlama
     });
 
     socket.on('connect', () => {
         console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
+        reconnectAttempts = 0; // Başarılı bağlantı sonrası sayacı sıfırla
+        startKeepAlive(); // Keep-alive mekanizmasını başlat
         setupChatListeners();
     });
 
@@ -372,14 +471,20 @@ function connectToSignalingServer() {
         cleanupPeerConnection(peerId);
     });
 
-    socket.on('disconnect', () => {
-        console.log('Sinyalleşme sunucusuyla bağlantı kesildi.');
-        // Tüm bağlantıları temizleyebiliriz veya yeniden bağlanmayı deneyebiliriz.
-        // Şimdilik basit tutalım, kullanıcı sayfayı yenileyebilir.
-        Object.keys(peerConnections).forEach(cleanupPeerConnection);
-        startButton.textContent = 'Sesi Başlat';
-        startButton.disabled = true; // Yeniden bağlanana kadar
-        alert("Sunucuyla bağlantı kesildi. Lütfen sayfayı yenileyin.");
+    socket.on('disconnect', (reason) => {
+        console.log('Sinyalleşme sunucusuyla bağlantı kesildi. Sebep:', reason);
+        stopKeepAlive(); // Keep-alive'ı durdur
+        
+        // Eğer manuel disconnect değilse, yeniden bağlanmayı dene
+        if (reason !== 'io client disconnect') {
+            console.log('Otomatik yeniden bağlanma deneniyor...');
+            handleConnectionLoss();
+        } else {
+            // Manuel disconnect durumunda tüm bağlantıları temizle
+            Object.keys(peerConnections).forEach(cleanupPeerConnection);
+            startButton.textContent = 'Sesi Başlat';
+            startButton.disabled = true;
+        }
     });
 
     socket.on('host-status', (data) => {
@@ -1445,6 +1550,7 @@ function leaveRoom() {
 
         // Socket bağlantısını kapat
         if (socket) {
+            stopKeepAlive(); // Keep-alive'ı durdur
             socket.disconnect();
             socket = null;
         }
