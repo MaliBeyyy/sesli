@@ -5,6 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "macro": "node w-macro.js",
+    "uptime": "node uptime-monitor.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
@@ -15,6 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "robotjs": "^0.6.0"
   }
 }

@@ -30,6 +30,66 @@ let myRoom = ''; // Oda adını saklamak için
 
 let isHost = false; // Host durumunu takip etmek için
 
+// Bağlantı durumu gösterme fonksiyonu
+function showConnectionStatus(message, type = 'info') {
+    // Mevcut durum mesajını kaldır
+    const existingStatus = document.getElementById('connectionStatus');
+    if (existingStatus) {
+        existingStatus.remove();
+    }
+    
+    // Yeni durum mesajı oluştur
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'connectionStatus';
+    statusDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 10px 15px;
+        border-radius: 5px;
+        color: white;
+        font-weight: bold;
+        z-index: 10000;
+        max-width: 300px;
+        word-wrap: break-word;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    `;
+    
+    // Tip'e göre renk ayarla
+    switch(type) {
+        case 'success':
+            statusDiv.style.backgroundColor = '#4CAF50';
+            break;
+        case 'error':
+            statusDiv.style.backgroundColor = '#f44336';
+            break;
+        case 'warning':
+            statusDiv.style.backgroundColor = '#ff9800';
+            break;
+        default:
+            statusDiv.style.backgroundColor = '#2196F3';
+    }
+    
+    statusDiv.textContent = message;
+    document.body.appendChild(statusDiv);
+    
+    // 3 saniye sonra kaldır (success hariç)
+    if (type !== 'success') {
+        setTimeout(() => {
+            if (statusDiv.parentNode) {
+                statusDiv.remove();
+            }
+        }, 3000);
+    } else {
+        // Success mesajını 2 saniye sonra kaldır
+        setTimeout(() => {
+            if (statusDiv.parentNode) {
+                statusDiv.remove();
+            }
+        }, 2000);
+    }
+}
+
 // STUN/TURN sunucu yapılandırması (NAT traversal için)
 const STUN_SERVERS = {
   iceServers: [
@@ -80,6 +140,22 @@ const STUN_SERVERS = {
       urls: 'turn:freeturn.tel:5349',
       username: 'free',
       credential: 'free'
+    },
+    // Ek TURN sunucuları (aynı ağ için)
+    {
+      urls: 'turn:relay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:relay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:relay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     }
   ],
   iceCandidatePoolSize: 10
@@ -100,12 +176,28 @@ function testWebRTCConnection() {
         return false;
     }
     
+    // Ağ durumunu kontrol et
+    const isLocalNetwork = window.location.hostname === 'localhost' || 
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.hostname.includes('192.168.') ||
+                          window.location.hostname.includes('10.') ||
+                          window.location.hostname.includes('172.');
+    
+    if (isLocalNetwork) {
+        console.log('🏠 Yerel ağ tespit edildi - TURN sunucuları öncelikli olacak');
+    } else {
+        console.log('🌐 Dış ağ tespit edildi - STUN sunucuları yeterli olabilir');
+    }
+    
     // STUN sunucu testi
     const testPC = new RTCPeerConnection(STUN_SERVERS);
     
     testPC.onicecandidate = (event) => {
         if (event.candidate) {
-            console.log('STUN sunucu çalışıyor, ICE candidate alındı:', event.candidate.type);
+            console.log('STUN/TURN sunucu çalışıyor, ICE candidate alındı:', event.candidate.type, event.candidate.protocol);
+            if (event.candidate.type === 'relay') {
+                console.log('🎯 TURN sunucu kullanılıyor - aynı ağ sorunu çözülebilir');
+            }
         }
     };
     
@@ -205,12 +297,65 @@ function connectToSignalingServer() {
     socket.on('connect', () => {
         console.log('Sinyalleşme sunucusuna bağlandı. ID:', socket.id, 'Kullanıcı Adı:', myUsername);
         setupChatListeners();
+        
+        // Bağlantı kurtarma - mevcut peer bağlantılarını yeniden kur
+        if (Object.keys(peerConnections).length > 0) {
+            console.log('Bağlantı kurtarıldı, peer bağlantıları yeniden kuruluyor...');
+            // Mevcut peer bağlantılarını temizle
+            Object.values(peerConnections).forEach(pc => {
+                if (pc && pc.close) pc.close();
+            });
+            peerConnections = {};
+            
+            // Yeni offer'lar gönder
+            if (localStream && localStream.active) {
+                setTimeout(() => {
+                    Object.keys(peerConnections).forEach(peerId => {
+                        initiateOffer(peerId);
+                    });
+                }, 1000);
+            }
+        }
     });
 
     socket.on('connect_error', (error) => {
         console.error('Bağlantı hatası:', error);
-        alert('Sunucuya bağlanırken bir hata oluştu. Lütfen sayfayı yenileyip tekrar deneyin.');
+        // Bağlantı hatası durumunda kullanıcıyı bilgilendir ama sayfayı yenileme
+        showConnectionStatus('Bağlantı hatası, yeniden bağlanılıyor...', 'error');
     });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Sunucu bağlantısı kesildi:', reason);
+        showConnectionStatus('Bağlantı kesildi, yeniden bağlanılıyor...', 'warning');
+    });
+
+    socket.on('reconnect', (attemptNumber) => {
+        console.log('Sunucuya yeniden bağlandı, deneme:', attemptNumber);
+        showConnectionStatus('Bağlantı kurtarıldı!', 'success');
+    });
+
+    socket.on('reconnect_error', (error) => {
+        console.error('Yeniden bağlanma hatası:', error);
+        showConnectionStatus('Yeniden bağlanma hatası', 'error');
+    });
+
+    socket.on('reconnect_failed', () => {
+        console.error('Yeniden bağlanma başarısız');
+        showConnectionStatus('Bağlantı kurulamadı, sayfayı yenileyin', 'error');
+    });
+
+    // Ping/pong mekanizması - sunucu ile bağlantıyı canlı tutmak için
+    socket.on('pong', () => {
+        console.log('Pong alındı - bağlantı aktif');
+    });
+
+    // Her 30 saniyede bir ping gönder
+    setInterval(() => {
+        if (socket && socket.connected) {
+            socket.emit('ping');
+            console.log('Ping gönderildi');
+        }
+    }, 30000);
 
     socket.on('existing-peers', (peersData) => {
         console.log('--- existing-peers ALINDI ---');

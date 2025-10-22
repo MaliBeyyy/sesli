@@ -53,24 +53,78 @@ const io = socketIO(server, {
 
 // Sunucu durumunu izle
 let activeConnections = 0;
+let lastActivity = Date.now();
+
+// Keep-alive mekanizması - Render'ın sunucuyu uyandık tutması için
 setInterval(() => {
     console.log(`Aktif bağlantı sayısı: ${activeConnections}`);
     // Bellek kullanımını logla
     const used = process.memoryUsage();
     console.log(`Bellek Kullanımı: ${Math.round(used.heapUsed / 1024 / 1024 * 100) / 100} MB`);
+    
+    // Render'ın sunucuyu uyandık tutması için aktivite simülasyonu
+    if (activeConnections === 0) {
+        console.log('Sunucu aktif tutuluyor...');
+        // Boş bir log yazdır - bu Render'ın sunucuyu aktif olarak algılamasını sağlar
+    }
 }, 30000);
+
+// Her 5 dakikada bir sunucuyu aktif tut
+setInterval(() => {
+    console.log(`[Keep-Alive] Sunucu aktif - ${new Date().toISOString()}`);
+    // Bellek temizliği
+    if (global.gc) {
+        global.gc();
+        console.log('Garbage collection çalıştırıldı');
+    }
+    
+    // Boş odaları temizle
+    for (const [roomId, room] of rooms.entries()) {
+        if (Object.keys(room.peers).length === 0) {
+            rooms.delete(roomId);
+            console.log(`[Cleanup] Boş oda silindi: ${roomId}`);
+        }
+    }
+}, 5 * 60 * 1000); // 5 dakika
+
+// Bellek kullanımı izleme ve uyarı
+setInterval(() => {
+    const used = process.memoryUsage();
+    const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024 * 100) / 100;
+    const heapTotalMB = Math.round(used.heapTotal / 1024 / 1024 * 100) / 100;
+    
+    console.log(`[Memory] Kullanılan: ${heapUsedMB}MB / Toplam: ${heapTotalMB}MB`);
+    
+    // Bellek kullanımı çok yüksekse uyar
+    if (heapUsedMB > 100) { // 100MB'dan fazla
+        console.warn(`[Memory Warning] Yüksek bellek kullanımı: ${heapUsedMB}MB`);
+        
+        // Zorla garbage collection
+        if (global.gc) {
+            global.gc();
+            console.log('[Memory] Zorla garbage collection çalıştırıldı');
+        }
+    }
+}, 2 * 60 * 1000); // 2 dakika
 
 // Her oda için ayrı kullanıcı listesi ve host bilgisi tutacağız
 const rooms = new Map(); // { roomId: { peers: { socketId: { socket, username } }, host: socketId } }
 
 io.on('connection', (socket) => {
     activeConnections++;
+    lastActivity = Date.now(); // Son aktivite zamanını güncelle
     
     const clientQueryUsername = socket.handshake.query.username;
     const roomId = socket.handshake.query.roomId;
     let processedUsername = clientQueryUsername || 'AnonimKullanici';
     
     console.log(`[Sunucu] Yeni bağlantı: ID=${socket.id}, Oda=${roomId}, Username=${processedUsername}`);
+    
+    // Bağlantı kalitesini izle
+    socket.on('ping', () => {
+        socket.emit('pong');
+        lastActivity = Date.now();
+    });
 
     // Oda yoksa oluştur ve ilk katılanı host yap
     if (!rooms.has(roomId)) {
@@ -195,6 +249,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         activeConnections--;
+        lastActivity = Date.now(); // Son aktivite zamanını güncelle
         if (rooms.has(roomId)) {
             const room = rooms.get(roomId);
             const disconnectedUser = room.peers[socket.id];
@@ -241,9 +296,33 @@ server.listen(PORT, () => {
     console.log(`Sinyalleşme sunucusu ${PORT} portunda çalışıyor...`);
 });
 
-// server.js dosyasının uygun bir yerine (diğer app.use'lardan sonra, server.listen'den önce)
+// Health check endpoint - Render'ın sunucuyu kontrol etmesi için
 app.get('/ping', (req, res) => {
     res.send('pong');
+});
+
+// Daha detaylı sağlık kontrolü
+app.get('/health', (req, res) => {
+    const health = {
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        activeConnections: activeConnections,
+        lastActivity: new Date(lastActivity).toISOString(),
+        memory: process.memoryUsage(),
+        rooms: rooms.size
+    };
+    res.json(health);
+});
+
+// Render'ın sunucuyu uyandık tutması için ek endpoint
+app.get('/keepalive', (req, res) => {
+    lastActivity = Date.now();
+    res.json({ 
+        status: 'alive', 
+        timestamp: new Date().toISOString(),
+        message: 'Sunucu aktif tutuluyor'
+    });
 });
 
 // Socket.IO client dosyasını sunmak için
