@@ -1,0 +1,22 @@
+# Render deployment configuration
+services:
+  - type: web
+    name: sesli-webrtc
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+
+  - type: web
+    name: sesli-uptime-monitor
+    env: node
+    buildCommand: npm install
+    startCommand: npm run uptime
+    envVars:
+      - key: NODE_ENV
+        value: production

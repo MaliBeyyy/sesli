@@ -3,6 +3,9 @@ const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
 
+// Render için optimizasyonlar
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+
 const app = express();
 
 // CORS middleware
@@ -57,15 +60,16 @@ let lastActivity = Date.now();
 
 // Keep-alive mekanizması - Render'ın sunucuyu uyandık tutması için
 setInterval(() => {
-    console.log(`Aktif bağlantı sayısı: ${activeConnections}`);
-    // Bellek kullanımını logla
-    const used = process.memoryUsage();
-    console.log(`Bellek Kullanımı: ${Math.round(used.heapUsed / 1024 / 1024 * 100) / 100} MB`);
-    
-    // Render'ın sunucuyu uyandık tutması için aktivite simülasyonu
-    if (activeConnections === 0) {
-        console.log('Sunucu aktif tutuluyor...');
-        // Boş bir log yazdır - bu Render'ın sunucuyu aktif olarak algılamasını sağlar
+    if (process.env.NODE_ENV === 'production') {
+        console.log(`[${new Date().toISOString()}] Aktif bağlantı: ${activeConnections}`);
+        // Bellek kullanımını logla
+        const used = process.memoryUsage();
+        console.log(`[Memory] ${Math.round(used.heapUsed / 1024 / 1024 * 100) / 100} MB`);
+        
+        // Render'ın sunucuyu uyandık tutması için aktivite simülasyonu
+        if (activeConnections === 0) {
+            console.log('[Keep-Alive] Sunucu aktif tutuluyor...');
+        }
     }
 }, 30000);
 
