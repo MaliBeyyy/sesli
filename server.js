@@ -246,26 +246,6 @@ app.get('/ping', (req, res) => {
     res.send('pong');
 });
 
-// Health check endpoint - Render için önemli
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString(),
-        activeConnections: activeConnections,
-        memoryUsage: process.memoryUsage()
-    });
-});
-
-// Keep-alive endpoint - Render free tier için
-app.get('/keepalive', (req, res) => {
-    console.log('Keep-alive ping alındı');
-    res.json({ 
-        status: 'alive', 
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-    });
-});
-
 // Socket.IO client dosyasını sunmak için
 app.get('/socket.io/socket.io.js', (req, res) => {
     res.redirect('https://cdn.socket.io/4.8.1/socket.io.min.js');
